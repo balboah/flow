@@ -1,0 +1,74 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<title>Flow</title>
+
+	<style type="text/css">
+		#playfield {
+			position: absolute;
+			display: block;
+			width: 500px;
+			height: 500px;
+			border: 1px solid black;
+		}
+
+		#playfield #worm {
+			position: relative;
+			width: 10px;
+			height: 10px;
+			background-color: red;
+			left: 0px;
+			bottom: 0px;
+		}
+	</style>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+	<script type="text/javascript">
+		var ws;
+		$(function() {
+			ws = new WebSocket('ws://localhost:5000/worms');
+			var worm = $('#worm');
+
+			// When the connection is open, send some data to the server
+			ws.onopen = function () {
+				ws.send('PING!');
+
+			  	$(document).keydown(function(event) {
+			  		switch(event.keyCode) {
+			  			case 37:
+			  				ws.send('LEFT');
+			  				break;
+			  			case 38:
+			  				ws.send('UP');
+			  				break;
+			  			case 39:
+			  				ws.send('RIGHT');
+			  				break;
+			  			case 40:
+			  				ws.send('DOWN');
+			  				break;
+			  		}
+			  	});
+			};
+
+			// Log errors
+			ws.onerror = function (error) {
+			  console.log('WebSocket Error ' + error);
+			};
+
+			// Log messages from the server
+			ws.onmessage = function (e) {
+			  console.log('Server: ' + e.data);
+			  pos = e.data.split(",");
+			  worm.css('left', pos[0] * 10);
+			  worm.css('top', pos[1] * 10);
+			};
+
+		});
+	</script>
+</head>
+<body>
+<div id="playfield">
+	<div id="worm"></div>
+</div>
+</body>
+</html>
