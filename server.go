@@ -1,12 +1,12 @@
 /*
 A websocket gaming platform.
-First up is Worms, a nokia snake but with multi player possibilities.
 
 TODO:
-	- Make an interval for movement, keep going in last direction
+	Snake
+	- Implement random spawning points/food that snakes can eat
+	- Have two players for each Playfield, if one eats the other the game is over. Highest points win
 	- Add a tail to the pixel to complete the worm, which grows whenever you eat a new point
-	- Have two players for each field, if one eats the other the game is over. Highest points win
-	- Create a list of games, each with available slots for players to compete
+	- Create availability slots in Lobby for knowing if another player can join
 */
 
 package flow
@@ -15,7 +15,12 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"math/rand"
 	"code.google.com/p/go.net/websocket"
+)
+const (
+	BOUNDARY = 49
+	TICK = 200
 )
 
 type Position struct {
@@ -23,80 +28,56 @@ type Position struct {
 	Y int
 }
 
-const Boundary = 49
+type Lobby map[string]*Playfield
 
-/*
-TODO:
-	Create a playfield to put worms in
-	One ticker per playfield and a new channel for each worm added for broadcasting this tick to it
+var lobby = make(Lobby)
 
-package main
-
-import (
-	"fmt"
-	"time"
-)
-
-func main() {
-	c := time.Tick(time.Second)
-	ticks := []chan time.Time{make(chan time.Time), make(chan time.Time), make(chan time.Time)}
-
-	go func() {
-		for {
-			tick := <- c
-			for _, t := range ticks {
-				t <- tick
-			}
-		}
-	}()
-
-	done := make(chan int)
-	go func() {
-		var timestamp time.Time
-		timestamp = <-ticks[0]
-		fmt.Printf("Got time in go 1: %v\n", timestamp)
-		done <- 1
-	}()
-
-	go func() {
-		var timestamp time.Time
-		timestamp = <-ticks[1]
-		fmt.Printf("Got time in go 2: %v\n", timestamp)
-		done <- 1
-	}()
-
-	go func() {
-		var timestamp time.Time
-		timestamp = <-ticks[2]
-		fmt.Printf("Got time in go 3: %v\n", timestamp)
-		done <- 1
-	}()
-
-	for n := 1; n <= 6; n++ {
-		<-done
-	}
+type Packet struct {
+	Command string
+	Payload string
 }
-*/
 
-type command int
+func (l Lobby) Playfield(key string) *Playfield {
+	p, ok := l[key]
+	if ok == false {
+		p = new(Playfield)
+		l[key] = p
+		log.Printf("New playfield: %s", key)
+	}
+	return p
+}
 
 type Playfield struct {
-	Movables map[Movable]chan command
+	Movables map[Movable]Transport
 	Ticker *time.Ticker
+	LastId uint
 }
 
-func (p *Playfield) AddMovable(m Movable) chan command {
+type Transport struct {
+	Outbox chan Packet
+	Inbox chan Packet
+	Id uint
+}
+
+func (p *Playfield) AddMovable(m Movable) (t Transport) {
+	log.Print("Adding movable", m)
 	if len(p.Movables) == 0 {
 		p.StartTicker()
-		p.Movables = make(map[Movable]chan command)
+		p.Movables = make(map[Movable]Transport)
+		p.LastId = 0
 	}
-	c := make(chan command)
-	p.Movables[m] = c
+	p.LastId++
+	// Buffered channel to make smoother movement by remembering an extra keystroke
+	t = Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1), Id: p.LastId}
+	p.Movables[m] = t
 
-	return c
+	log.Print("Movable id:", t.Id)
+	return
 }
 
 func (p *Playfield) RemoveMovable(m Movable) {
+	log.Print("Deleting movable", m)
+	p.Broadcast(Packet{"KILL", fmt.Sprintf("%d", p.Movables[m].Id)})
 	delete(p.Movables, m)
 	if len(p.Movables) == 0 {
 		p.StopTicker()
@@ -104,15 +85,14 @@ func (p *Playfield) RemoveMovable(m Movable) {
 }
 
 func (p *Playfield) StartTicker() {
-	p.Ticker = time.NewTicker(100 * time.Millisecond)
+	p.Ticker = time.NewTicker(TICK * time.Millisecond)
 
 	log.Println("Starting timer")
 	go func() {
 		for {
 			<- p.Ticker.C
-			for m, _ := range p.Movables {
-				log.Printf("Auto move %s", m.Direction())
-				// TODO: Move this switch into a method
+			for m, t := range p.Movables {
+				m.Communicate(t)
 				switch m.Direction() {
 				case "UP":
 					m.MoveUp()
@@ -123,10 +103,18 @@ func (p *Playfield) StartTicker() {
 				case "RIGHT":
 					m.MoveRight()
 				}
-				m.SendPosition()
+				// TODO: Make the payload a struct as well
+				p.Broadcast(Packet{Command: "MOVE", Payload: fmt.Sprintf("%d,", t.Id) + m.Position()})
 			}
 		}
 	}()
+}
+
+func (p *Playfield) Broadcast(packet Packet) {
+	// TODO: OK check to skip filled queues? Kill worm if it cant keep up?
+	for _, t := range p.Movables {
+		t.Outbox <- packet
+	}
 }
 
 func (p *Playfield) StopTicker() {
@@ -138,27 +126,57 @@ type Movable interface {
 	MoveRight() bool
 	MoveUp() bool
 	MoveDown() bool
-	SendPosition()
 	Direction() string
+	Position() string
+	Communicate(Transport)
 }
 
 type Worm struct {
-	Position Position
-	C chan string
+	position Position
 	direction string
+}
+
+func (w *Worm) Position() string {
+	return fmt.Sprintf("%d,%d", w.position.X, w.position.Y)
+}
+
+func (w *Worm) Communicate(t Transport) {
+	select {
+		// Direction changes is the only thing we expect on the inbox right now
+		case message := <- t.Inbox:
+			switch message.Command {
+			case "MOVE":
+				switch message.Payload {
+				case "UP", "DOWN", "LEFT", "RIGHT":
+					w.direction = message.Payload
+				}
+			case "HELLO":
+			default:
+				log.Print("Unknown command:", message)
+			}
+		default:
+	}
 }
 
 func (w *Worm) Direction() string {
 	if w.direction == "" {
-		w.direction = "UP"
-		// TODO: Make this a random choice
+		switch rand.Intn(4) {
+		case 0:
+			w.direction = "RIGHT"
+		case 1:
+			w.direction = "LEFT"
+		case 2:
+			w.direction = "DOWN"
+		case 3:
+			w.direction = "UP"
+		}
 	}
 	return w.direction
 }
 
 func (w *Worm) MoveLeft() bool {
-	if w.Position.X > 0 {
-		w.Position.X--
+	if w.position.X > 0 {
+		w.position.X--
 		w.direction = "LEFT"
 		return true
 	}
@@ -166,8 +184,8 @@ func (w *Worm) MoveLeft() bool {
 }
 
 func (w *Worm) MoveUp() bool {
-	if w.Position.Y > 0 {
-		w.Position.Y--
+	if w.position.Y > 0 {
+		w.position.Y--
 		w.direction = "UP"
 		return true
 	}
@@ -175,8 +193,8 @@ func (w *Worm) MoveUp() bool {
 }
 
 func (w *Worm) MoveRight() bool {
-	if w.Position.X < Boundary {
-		w.Position.X++
+	if w.position.X < BOUNDARY {
+		w.position.X++
 		w.direction = "RIGHT"
 		return true
 	}
@@ -184,95 +202,65 @@ func (w *Worm) MoveRight() bool {
 }
 
 func (w *Worm) MoveDown() bool {
-	if w.Position.Y < Boundary {
-		w.Position.Y++
+	if w.position.Y < BOUNDARY {
+		w.position.Y++
 		w.direction = "DOWN"
 		return true
 	}
 	return false
 }
 
-func (w *Worm) SendPosition() {
-	log.Printf("Sending position to channel %v", w.C)
-	w.C <- fmt.Sprintf("%d,%d", w.Position.X, w.Position.Y)
-}
-
+// This is where the action starts
 func WormsServer(ws *websocket.Conn) {
 	log.Println("New Worms connection!")
 	defer ws.Close()
 	defer log.Println("Worms connection going down!")
 
-	worm := Worm{Position: Position{25, 25}, C: make(chan string)}
+	worm := Worm{position: Position{25, 25}}
 
-	var playfield Playfield
+	// TODO: Make this key dynamic once we want several playfields
+	playfield := lobby.Playfield("1337")
 
-	// TODO: Have a Lobby map of playfields, accessible from multiple servers with a playfield id
-	playfield.AddMovable(&worm)
+	t := playfield.AddMovable(&worm)
 	defer playfield.RemoveMovable(&worm)
 
-	client := make(chan string)
+	quit := make(chan bool)
+
+	// Receive from client
 	go func() {
-		var message string
+		var message Packet
 		for {
-			err := websocket.Message.Receive(ws, &message)
+			err := websocket.JSON.Receive(ws, &message)
 			if err != nil {
 				log.Printf("Error reading websocket message: %v", err)
-				close(client)
+				quit <- true
 				return
 			}
-			log.Printf("Got data on worms server (%d): %v", len(message), message)
-			client <- message
+			log.Print("Got data on worms server", message)
+			t.Inbox <- message
 		}
 	}()
 
-	for {
-		// Select message to or from client
-		// Messages sent are goroutined since it will come back in same select in worm.C
-		select {
-		case message, ok := <-client:
-			if ok == false {
-				// Unable to receive more data
-				// TODO: worm.suicide()
-				return
-			}
-			go func() {
-				switch message {
-				case "UP":
-					worm.MoveUp()
-				case "DOWN":
-					worm.MoveDown()
-				case "LEFT":
-					worm.MoveLeft()
-				case "RIGHT":
-					worm.MoveRight()
+	// Transmit to client
+	go func() {
+		for {
+			select {
+			case message := <- t.Outbox:
+				err := websocket.JSON.Send(ws, message)
+				if err != nil {
+					log.Printf("Error sending position: %v", err)
+					quit <- true
 				}
-				worm.SendPosition()
-			}()
-		case message := <-worm.C:
-			err := websocket.Message.Send(ws, message)
-			if err != nil {
-				log.Printf("Error sending position: %v", err)
-				// Unable to send more data
-				// TODO: worm.suicide()
+			case <-quit:
 				return
 			}
 		}
-	}
+	}()
+
+	<- quit
 }
 
 func WormsHandler() websocket.Handler {
 	log.Println("New Worms handler!")
 	return websocket.Handler(WormsServer)
-}
-
-// Echo the data received on the WebSocket.
-func EchoServer(ws *websocket.Conn) {
-	var message string
-	websocket.Message.Receive(ws, &message)
-	log.Println("Got data on echo server (", len(message), "): ", message)
-	websocket.Message.Send(ws, message)
-}
-
-func EchoHandler() websocket.Handler {
-	return websocket.Handler(EchoServer)
 }

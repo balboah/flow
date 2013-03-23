@@ -2,7 +2,7 @@ package flow
 
 import (
 	"testing"
-	"bytes"
+	"time"
 	"fmt"
 	"net"
 	"net/http"
@@ -16,7 +16,7 @@ var once sync.Once
 var serverAddr string
 
 func startServer() {
-		http.Handle("/echo", EchoHandler())
+		http.Handle("/worms", WormsHandler())
 		server := httptest.NewServer(nil)
 		serverAddr = server.Listener.Addr().String()
 		log.Print("Test WebSocket server listening on ", serverAddr)
@@ -27,31 +27,90 @@ func newConfig(t *testing.T, path string) *websocket.Config {
         return config
 }
 
-func TestEchoServer(t *testing.T) {
+func TestWormsServerConnect(t *testing.T) {
 	once.Do(startServer)
 
 	client, err := net.Dial("tcp", serverAddr)
 	if err != nil {
 			t.Fatal("dialing", err)
 	}
-	conn, err := websocket.NewClient(newConfig(t, "/echo"), client)
+	conn, err := websocket.NewClient(newConfig(t, "/worms"), client)
 	if err != nil {
 			t.Errorf("WebSocket handshake error: %v", err)
 			return
 	}
 	defer conn.Close()
 
-	msg := []byte("hello, world\n")
-	if _, err := conn.Write(msg); err != nil {
-			t.Errorf("Write: %v", err)
+	if err := websocket.JSON.Send(conn, Packet{Command: "HELLO"}); err != nil {
+		t.Errorf("Write: %v", err)
 	}
-	var actual_msg = make([]byte, 512)
-	n, err := conn.Read(actual_msg)
-	if err != nil {
-			t.Errorf("Read: %v", err)
+
+	var actual_msg Packet
+
+	timer := time.AfterFunc(TICK * 2 * time.Millisecond, func() {
+		t.Errorf("Timed out waiting for a reply")
+	})
+	if err := websocket.JSON.Receive(conn, &actual_msg); err != nil {
+		t.Errorf("Read: %v", err)
 	}
-	actual_msg = actual_msg[0:n]
-	if !bytes.Equal(msg, actual_msg) {
-			t.Errorf("Echo: expected %q got %q", msg, actual_msg)
+	timer.Stop()
+
+	if actual_msg.Command != "MOVE" {
+		t.Errorf("Unexpected reply", actual_msg)
+	}
+}
+
+func TestWormMovability(t *testing.T) {
+	w := Worm{position: Position{25, 25}}
+
+	if d := w.Direction(); d == "" {
+		t.Errorf("Expeceted direction to be initialized")
+	}
+
+	testPos := func(p Position) {
+		if p != w.position {
+			t.Error("Wrong position", w.position, "!=", p)
+		}
+	}
+
+	originalPos := w.position
+
+	w.MoveLeft()
+	if d := w.Direction(); d != "LEFT" {
+		t.Errorf("Unexpected direction", d)
+	}
+	testPos(Position{originalPos.X - 1, w.position.Y})
+
+	w.MoveRight()
+	if d := w.Direction(); d != "RIGHT" {
+		t.Errorf("Unexpected direction", d)
+	}
+	testPos(Position{originalPos.X, w.position.Y})
+
+	w.MoveUp()
+	if d := w.Direction(); d != "UP" {
+		t.Errorf("Unexpected direction", d)
+	}
+	testPos(Position{originalPos.X, originalPos.Y - 1})
+
+	w.MoveDown()
+	if d := w.Direction(); d != "DOWN" {
+		t.Errorf("Unexpected direction", d)
+	}
+	testPos(Position{originalPos.X, originalPos.Y})
+}
+
+func TestCommunicate(t *testing.T) {
+	w := Worm{position: Position{25, 25}}
+	w.MoveRight()
+
+	trans := Transport{Inbox: make(chan Packet)}
+	go func() {
+		w.Communicate(trans)
+	}()
+	trans.Inbox <- Packet{Command: "MOVE", Payload: "LEFT"}
+
+	if d := w.Direction(); d != "LEFT" {
+		t.Error("Did not obey communicated command, direction is:", d)
 	}
 }

@@ -12,8 +12,8 @@
 			border: 1px solid black;
 		}
 
-		#playfield #worm {
-			position: relative;
+		#playfield .worm {
+			position: absolute;
 			width: 10px;
 			height: 10px;
 			background-color: red;
@@ -25,26 +25,44 @@
 	<script type="text/javascript">
 		var ws;
 		$(function() {
+			function cmd(ws, data) {
+				ws.send(JSON.stringify(data));
+			}
+
+			function getWorm(id) {
+				var worm = $('#worm-' + id);
+				if (worm.get() == false) {
+					worm = $('<div class="worm"></div>');
+					worm.attr('id', 'worm-' + id);
+					worm.css('z-index', id);
+					rgb = 'rgb(' + parseInt((Math.random()*100)+100) + ',' + parseInt((Math.random()*100)+100) +
+						',' + parseInt((Math.random()*100)+100) + ')';
+					worm.css('background-color', rgb);
+					$('#playfield').append(worm);
+					console.log('New worm id: ' + id);
+				}
+
+				return worm
+			}
 			ws = new WebSocket('ws://localhost:5000/worms');
-			var worm = $('#worm');
 
 			// When the connection is open, send some data to the server
 			ws.onopen = function () {
-				ws.send('PING!');
+				cmd(ws, {"Command": "HELLO"});
 
 			  	$(document).keydown(function(event) {
 			  		switch(event.keyCode) {
 			  			case 37:
-			  				ws.send('LEFT');
+			  				cmd(ws, {"Command": "MOVE", "Payload": "LEFT"});
 			  				break;
 			  			case 38:
-			  				ws.send('UP');
+			  				cmd(ws, {"Command": "MOVE", "Payload": "UP"});
 			  				break;
 			  			case 39:
-			  				ws.send('RIGHT');
+			  				cmd(ws, {"Command": "MOVE", "Payload": "RIGHT"});
 			  				break;
 			  			case 40:
-			  				ws.send('DOWN');
+			  				cmd(ws, {"Command": "MOVE", "Payload": "DOWN"});
 			  				break;
 			  		}
 			  	});
@@ -52,15 +70,29 @@
 
 			// Log errors
 			ws.onerror = function (error) {
-			  console.log('WebSocket Error ' + error);
+				console.log('WebSocket Error ' + error);
 			};
 
 			// Log messages from the server
 			ws.onmessage = function (e) {
-			  console.log('Server: ' + e.data);
-			  pos = e.data.split(",");
-			  worm.css('left', pos[0] * 10);
-			  worm.css('top', pos[1] * 10);
+				var packet = JSON.parse(e.data);
+
+				switch (packet.Command) {
+				case "MOVE":
+					parts = packet.Payload.split(",");
+					var worm = getWorm(parts[0]);
+
+					left = parseInt(worm.css('left'));
+					top = parseInt(worm.css('top'));
+					newleft = parts[1] * 10;
+					newtop = parts[2] * 10;
+
+					worm.animate({'left': newleft, 'top': newtop}, 100);
+					break;
+				case "KILL":
+					var worm = getWorm(packet.Payload);
+					worm.fadeOut({"complete": function() { worm.remove() }});
+				}
 			};
 
 		});
