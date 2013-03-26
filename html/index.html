@@ -3,7 +3,7 @@
 <head>
 	<title>Flow</title>
 
-	<style type="text/css">
+	<style>
 		#playfield {
 			position: absolute;
 			display: block;
@@ -21,86 +21,15 @@
 			bottom: 0px;
 		}
 	</style>
+
 	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-	<script type="text/javascript">
-		var ws;
-		$(function() {
-			function cmd(ws, data) {
-				ws.send(JSON.stringify(data));
-			}
-
-			function getWorm(id) {
-				var worm = $('#worm-' + id);
-				if (worm.get() == false) {
-					worm = $('<div class="worm"></div>');
-					worm.attr('id', 'worm-' + id);
-					worm.css('z-index', id);
-					rgb = 'rgb(' + parseInt((Math.random()*100)+100) + ',' + parseInt((Math.random()*100)+100) +
-						',' + parseInt((Math.random()*100)+100) + ')';
-					worm.css('background-color', rgb);
-					$('#playfield').append(worm);
-					console.log('New worm id: ' + id);
-				}
-
-				return worm
-			}
-			ws = new WebSocket('ws://localhost:5000/worms');
-
-			// When the connection is open, send some data to the server
-			ws.onopen = function () {
-				cmd(ws, {"Command": "HELLO"});
-
-			  	$(document).keydown(function(event) {
-			  		switch(event.keyCode) {
-			  			case 37:
-			  				cmd(ws, {"Command": "MOVE", "Payload": "LEFT"});
-			  				break;
-			  			case 38:
-			  				cmd(ws, {"Command": "MOVE", "Payload": "UP"});
-			  				break;
-			  			case 39:
-			  				cmd(ws, {"Command": "MOVE", "Payload": "RIGHT"});
-			  				break;
-			  			case 40:
-			  				cmd(ws, {"Command": "MOVE", "Payload": "DOWN"});
-			  				break;
-			  		}
-			  	});
-			};
-
-			// Log errors
-			ws.onerror = function (error) {
-				console.log('WebSocket Error ' + error);
-			};
-
-			// Log messages from the server
-			ws.onmessage = function (e) {
-				var packet = JSON.parse(e.data);
-
-				switch (packet.Command) {
-				case "MOVE":
-					parts = packet.Payload.split(",");
-					var worm = getWorm(parts[0]);
-
-					left = parseInt(worm.css('left'));
-					top = parseInt(worm.css('top'));
-					newleft = parts[1] * 10;
-					newtop = parts[2] * 10;
-
-					worm.animate({'left': newleft, 'top': newtop}, 100);
-					break;
-				case "KILL":
-					var worm = getWorm(packet.Payload);
-					worm.fadeOut({"complete": function() { worm.remove() }});
-				}
-			};
-
-		});
-	</script>
+	<script src="game.js"></script>
 </head>
 <body>
-<div id="playfield">
-	<div id="worm"></div>
-</div>
+
+	<div id="playfield">
+		<div id="worm"></div>
+	</div>
+
 </body>
 </html>
