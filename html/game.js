@@ -1,6 +1,6 @@
 $(function(){
 
-	var ws = new WebSocket('ws://' + document.location.host + ':5000/worms');
+	var ws = new WebSocket('ws://' + document.location.host + '/worms');
 
 	function cmd(data) {
 		ws.send(JSON.stringify(data));
@@ -75,7 +75,7 @@ $(function(){
 			$worm.animate({
 				left: newLeft,
 				top: newTop
-			}, 200, 'linear');
+			}, 150, 'linear');
 		},
 		KILL: function(payload){
 			var $worm = getWorm(payload);
