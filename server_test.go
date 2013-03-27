@@ -27,6 +27,26 @@ func newConfig(t *testing.T, path string) *websocket.Config {
         return config
 }
 
+func TestConcurrency(t *testing.T) {
+	times := 1
+	done := make(chan int)
+	for n := 0; n < times; n++ {
+		go func() {
+			TestWormsServerConnect(t)
+			done <- 1
+		}()
+	}
+
+	for n := 0; n < times; n++ {
+		select {
+		case <-done:
+		case <-time.After(TICK * 2 * time.Millisecond):
+			t.Errorf("Timed out waiting for a reply")
+			return
+		}
+	}
+}
+
 func TestWormsServerConnect(t *testing.T) {
 	once.Do(startServer)
 
@@ -55,7 +75,9 @@ func TestWormsServerConnect(t *testing.T) {
 	}
 	timer.Stop()
 
-	if actual_msg.Command != "MOVE" {
+	switch actual_msg.Command {
+	case "MOVE", "KILL", "HELLO":
+	default:
 		t.Errorf("Unexpected reply", actual_msg)
 	}
 }
