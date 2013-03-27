@@ -244,14 +244,11 @@ func WormsServer(ws *websocket.Conn) {
 	// Transmit to client
 	go func() {
 		for {
-			select {
-			case message := <- t.Outbox:
-				err := websocket.JSON.Send(ws, message)
-				if err != nil {
-					log.Printf("Error sending position: %v", err)
-					quit <- true
-				}
-			case <-quit:
+			message := <-t.Outbox
+			err := websocket.JSON.Send(ws, message)
+			if err != nil {
+				log.Printf("Error sending position: %v", err)
+				quit <- true
 				return
 			}
 		}
