@@ -17,7 +17,6 @@ func main() {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	log.Println("Starting flow server")
-	http.Handle("/echo", flow.EchoHandler())
 	http.Handle("/worms", flow.WormsHandler())
 	http.Handle("/", http.FileServer(http.Dir(root)))
 
