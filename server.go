@@ -14,6 +14,7 @@ package flow
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 	"math/rand"
 	"code.google.com/p/go.net/websocket"
@@ -28,9 +29,14 @@ type Position struct {
 	Y int
 }
 
-type Lobby map[string]*Playfield
+type Id uint
 
-var lobby = make(Lobby)
+type Lobby struct {
+	Playfields map[string]*Playfield
+	mu sync.Mutex
+}
+
+var lobby Lobby = Lobby{Playfields: make(map[string]*Playfield)}
 
 type Packet struct {
 	Command string
@@ -38,86 +44,89 @@ type Packet struct {
 }
 
 func (l Lobby) Playfield(key string) *Playfield {
-	p, ok := l[key]
+	l.mu.Lock()
+	p, ok := l.Playfields[key]
 	if ok == false {
-		p = new(Playfield)
-		l[key] = p
+		p = &Playfield{make(map[Movable]Id), time.NewTicker(TICK * time.Millisecond), make(chan Movable), make(chan Movable), 0}
+		p.Start()
+		l.Playfields[key] = p
 		log.Printf("New playfield: %s", key)
 	}
+	l.mu.Unlock()
+
 	return p
 }
 
 type Playfield struct {
-	Movables map[Movable]Transport
+	Movables map[Movable]Id
 	Ticker *time.Ticker
-	LastId uint
+	NewMovable chan Movable
+	KillMovable chan Movable
+	LastId Id
 }
 
 type Transport struct {
 	Outbox chan Packet
 	Inbox chan Packet
-	Id uint
 }
 
-func (p *Playfield) AddMovable(m Movable) (t Transport) {
+func (p *Playfield) addMovable(m Movable) {
 	log.Print("Adding movable", m)
-	if len(p.Movables) == 0 {
-		p.StartTicker()
-		p.Movables = make(map[Movable]Transport)
-		p.LastId = 0
-	}
 	p.LastId++
 	// Buffered channel to make smoother movement by remembering an extra keystroke
-	t = Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1), Id: p.LastId}
-	p.Movables[m] = t
+	// t = Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1), Id: p.LastId}
+	// p.Movables[m] = t
+	p.Movables[m] = p.LastId
 
-	log.Print("Movable id:", t.Id)
+	log.Print("Movable id:", p.LastId)
 	return
 }
 
-func (p *Playfield) RemoveMovable(m Movable) {
+func (p *Playfield) removeMovable(m Movable) {
 	log.Print("Deleting movable", m)
-	p.Broadcast(Packet{"KILL", fmt.Sprintf("%d", p.Movables[m].Id)})
+	m.Kill()
 	delete(p.Movables, m)
-	if len(p.Movables) == 0 {
-		p.StopTicker()
-	}
+	p.broadcast(Packet{"KILL", fmt.Sprintf("%d", p.Movables[m])})
 }
 
-func (p *Playfield) StartTicker() {
-	p.Ticker = time.NewTicker(TICK * time.Millisecond)
-
-	log.Println("Starting timer")
+func (p *Playfield) Start() {
+	log.Println("Playfield starting")
 	go func() {
 		for {
-			<- p.Ticker.C
-			for m, t := range p.Movables {
-				m.Communicate(t)
-				switch m.Direction() {
-				case "UP":
-					m.MoveUp()
-				case "DOWN":
-					m.MoveDown()
-				case "LEFT":
-					m.MoveLeft()
-				case "RIGHT":
-					m.MoveRight()
+			select {
+			case m := <-p.NewMovable:
+				p.addMovable(m)
+			case m := <-p.KillMovable:
+				p.removeMovable(m)
+			case <-p.Ticker.C:
+				for m, id := range p.Movables {
+					m.Communicate()
+					switch m.Direction() {
+					case "UP":
+						m.MoveUp()
+					case "DOWN":
+						m.MoveDown()
+					case "LEFT":
+						m.MoveLeft()
+					case "RIGHT":
+						m.MoveRight()
+					}
+					// TODO: Make the payload a struct as well
+					p.broadcast(Packet{Command: "MOVE", Payload: fmt.Sprintf("%d,", id) + m.Position()})
 				}
-				// TODO: Make the payload a struct as well
-				p.Broadcast(Packet{Command: "MOVE", Payload: fmt.Sprintf("%d,", t.Id) + m.Position()})
 			}
 		}
 	}()
 }
 
-func (p *Playfield) Broadcast(packet Packet) {
+func (p *Playfield) broadcast(packet Packet) {
 	// TODO: OK check to skip filled queues? Kill worm if it cant keep up?
-	for _, t := range p.Movables {
-		t.Outbox <- packet
+	for m, _ := range p.Movables {
+		m.Send(packet)
 	}
 }
 
-func (p *Playfield) StopTicker() {
+func (p *Playfield) Stop() {
 	p.Ticker.Stop()
 }
 
@@ -128,23 +137,42 @@ type Movable interface {
 	MoveDown() bool
 	Direction() string
 	Position() string
-	Communicate(Transport)
+	Communicate()
+	Send(Packet)
+	Kill()
 }
 
 type Worm struct {
 	position Position
 	direction string
+	C Transport
+}
+
+func NewWorm() Worm {
+	t := Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1)}
+	return Worm{position: Position{25, 25}, C: t}
+}
+
+func (w *Worm) Kill() {
+	close(w.C.Outbox)
+}
+
+func (w *Worm) Send(packet Packet) {
+	w.C.Outbox <- packet
 }
 
 func (w *Worm) Position() string {
 	return fmt.Sprintf("%d,%d", w.position.X, w.position.Y)
 }
 
-func (w *Worm) Communicate(t Transport) {
+func (w *Worm) Communicate() {
 	select {
 		// Direction changes is the only thing we expect on the inbox right now
-		case message := <- t.Inbox:
+		case message := <- w.C.Inbox:
 			switch message.Command {
+			case "KILL":
+				close(w.C.Outbox)
+				log.Printf("I got killed :(")
 			case "MOVE":
 				switch message.Payload {
 				case "UP", "DOWN", "LEFT", "RIGHT":
@@ -212,17 +240,21 @@ func (w *Worm) MoveDown() bool {
 
 // This is where the action starts
 func WormsServer(ws *websocket.Conn) {
+	// TODO: Set read/write timeouts
+
 	log.Println("New Worms connection!")
 	defer ws.Close()
 	defer log.Println("Worms connection going down!")
 
-	worm := Worm{position: Position{25, 25}}
+	worm := NewWorm()
 
 	// TODO: Make this key dynamic once we want several playfields
 	playfield := lobby.Playfield("1337")
 
-	t := playfield.AddMovable(&worm)
-	defer playfield.RemoveMovable(&worm)
+	playfield.NewMovable <- &worm
+	//t := playfield.addMovable(&worm)
+
+	//defer playfield.removeMovable(&worm)
 
 	quit := make(chan bool)
 
@@ -233,28 +265,28 @@ func WormsServer(ws *websocket.Conn) {
 			err := websocket.JSON.Receive(ws, &message)
 			if err != nil {
 				log.Printf("Error reading websocket message: %v", err)
-				quit <- true
-				return
+				break
 			}
 			log.Print("Got data on worms server", message)
-			t.Inbox <- message
+			worm.C.Inbox <- message
 		}
+		quit <- true
 	}()
 
 	// Transmit to client
 	go func() {
-		for {
-			message := <-t.Outbox
+		for message := range worm.C.Outbox {
 			err := websocket.JSON.Send(ws, message)
 			if err != nil {
 				log.Printf("Error sending position: %v", err)
-				quit <- true
-				return
+				break
 			}
 		}
+		quit <- true
 	}()
 
 	<- quit
+	playfield.KillMovable <- &worm
 }
 
 func WormsHandler() websocket.Handler {
