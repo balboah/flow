@@ -2,29 +2,10 @@ $(function(){
 
 	var ws = new WebSocket('ws://' + document.location.host + '/worms');
 
+	var flow = new Flow();
+
 	function cmd(data) {
 		ws.send(JSON.stringify(data));
-	}
-
-	function getWorm(id) {
-		var $worm = $('#worm-' + id),
-			rgb;
-
-		if (!$worm.length) {
-			$worm = $('<div class="worm"/>')
-				.attr('id', 'worm-' + id)
-				.css('z-index', id);
-
-			rgb = 'rgb(' + parseInt((Math.random()*100)+100) + ',' + parseInt((Math.random()*100)+100) +
-				',' + parseInt((Math.random()*100)+100) + ')';
-			$worm.css('background-color', rgb);
-
-			$('#playfield').append($worm);
-
-			console.log('New worm id: ', id);
-		}
-
-		return $worm;
 	}
 
 	// When the connection is open, send some data to the server
@@ -49,6 +30,9 @@ $(function(){
 					Payload: dir
 				});
 			}
+			if (ev.keyCode == 71) {
+				flow.grid();
+			}
 		});
 	};
 
@@ -67,24 +51,10 @@ $(function(){
 	// Game commands received from server
 	var ServerCommands = {
 		MOVE: function(payload){
-			var data = payload.split(','),
-				$worm = getWorm(data[0]),
-				newLeft = data[1] * 10;
-				newTop = data[2] * 10;
-
-			$worm.animate({
-				left: newLeft,
-				top: newTop
-			}, 150, 'linear');
+			flow.moveWorm.apply(flow, payload.split(','));
 		},
 		KILL: function(payload){
-			var $worm = getWorm(payload);
-
-			$worm.fadeOut({
-				complete: function(){
-					$worm.remove();
-				}
-			});
+			flow.kill(payload);
 		}
 	};
 
