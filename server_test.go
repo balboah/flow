@@ -28,7 +28,7 @@ func newConfig(t *testing.T, path string) *websocket.Config {
 }
 
 func TestConcurrency(t *testing.T) {
-	times := 1
+	times := 100
 	done := make(chan int)
 	for n := 0; n < times; n++ {
 		go func() {
@@ -123,14 +123,17 @@ func TestWormMovability(t *testing.T) {
 }
 
 func TestCommunicate(t *testing.T) {
-	w := Worm{position: Position{25, 25}}
+	w := NewWorm()
 	w.MoveRight()
 
-	trans := Transport{Inbox: make(chan Packet)}
+	done := make(chan int)
 	go func() {
-		w.Communicate(trans)
+		w.Communicate()
+		done <- 1
 	}()
-	trans.Inbox <- Packet{Command: "MOVE", Payload: "LEFT"}
+
+	w.C.Inbox <- Packet{Command: "MOVE", Payload: "LEFT"}
+	<-done
 
 	if d := w.Direction(); d != "LEFT" {
 		t.Error("Did not obey communicated command, direction is:", d)

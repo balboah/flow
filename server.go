@@ -47,7 +47,13 @@ func (l Lobby) Playfield(key string) *Playfield {
 	l.mu.Lock()
 	p, ok := l.Playfields[key]
 	if ok == false {
-		p = &Playfield{make(map[Movable]Id), time.NewTicker(TICK * time.Millisecond), make(chan Movable), make(chan Movable), 0}
+		p = &Playfield{
+			make(map[Movable]Id),
+			time.NewTicker(TICK * time.Millisecond),
+			make(chan Movable),
+			make(chan Movable),
+			make(chan Packet, 1024),
+			0}
 		p.Start()
 		l.Playfields[key] = p
 		log.Printf("New playfield: %s", key)
@@ -60,8 +66,9 @@ func (l Lobby) Playfield(key string) *Playfield {
 type Playfield struct {
 	Movables map[Movable]Id
 	Ticker *time.Ticker
-	NewMovable chan Movable
-	KillMovable chan Movable
+	Join chan Movable
+	Part chan Movable
+	Broadcast chan Packet
 	LastId Id
 }
 
@@ -71,14 +78,9 @@ type Transport struct {
 }
 
 func (p *Playfield) addMovable(m Movable) {
-	log.Print("Adding movable", m)
 	p.LastId++
-	// Buffered channel to make smoother movement by remembering an extra keystroke
-	// t = Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1), Id: p.LastId}
-	// p.Movables[m] = t
 	p.Movables[m] = p.LastId
-
-	log.Print("Movable id:", p.LastId)
+	log.Print("New movable id:", p.LastId)
 	return
 }
 
@@ -86,7 +88,8 @@ func (p *Playfield) removeMovable(m Movable) {
 	log.Print("Deleting movable", m)
 	m.Kill()
 	delete(p.Movables, m)
-	p.broadcast(Packet{"KILL", fmt.Sprintf("%d", p.Movables[m])})
+
+	p.Broadcast <- Packet{"KILL", fmt.Sprintf("%d", p.Movables[m])}
 }
 
 func (p *Playfield) Start() {
@@ -94,9 +97,9 @@ func (p *Playfield) Start() {
 	go func() {
 		for {
 			select {
-			case m := <-p.NewMovable:
+			case m := <-p.Join:
 				p.addMovable(m)
-			case m := <-p.KillMovable:
+			case m := <-p.Part:
 				p.removeMovable(m)
 			case <-p.Ticker.C:
 				for m, id := range p.Movables {
@@ -112,18 +115,20 @@ func (p *Playfield) Start() {
 						m.MoveRight()
 					}
 					// TODO: Make the payload a struct as well
-					p.broadcast(Packet{Command: "MOVE", Payload: fmt.Sprintf("%d,", id) + m.Position()})
+					p.Broadcast <- Packet{Command: "MOVE", Payload: fmt.Sprintf("%d,", id) + m.Position()}
+				}
+			case packet := <-p.Broadcast:
+				for m, id := range p.Movables {
+					c := m.Channel()
+					select {
+						case c.Outbox <- packet:
+						default:
+							log.Print("Could not send packet to movable:", id)
+					}
 				}
 			}
 		}
 	}()
-}
-
-func (p *Playfield) broadcast(packet Packet) {
-	// TODO: OK check to skip filled queues? Kill worm if it cant keep up?
-	for m, _ := range p.Movables {
-		m.Send(packet)
-	}
 }
 
 func (p *Playfield) Stop() {
@@ -137,8 +142,8 @@ type Movable interface {
 	MoveDown() bool
 	Direction() string
 	Position() string
+	Channel() Transport
 	Communicate()
-	Send(Packet)
 	Kill()
 }
 
@@ -157,12 +162,12 @@ func (w *Worm) Kill() {
 	close(w.C.Outbox)
 }
 
-func (w *Worm) Send(packet Packet) {
-	w.C.Outbox <- packet
-}
-
 func (w *Worm) Position() string {
 	return fmt.Sprintf("%d,%d", w.position.X, w.position.Y)
+}
+
+func (w *Worm) Channel() Transport {
+	return w.C
 }
 
 func (w *Worm) Communicate() {
@@ -172,7 +177,6 @@ func (w *Worm) Communicate() {
 			switch message.Command {
 			case "KILL":
 				close(w.C.Outbox)
-				log.Printf("I got killed :(")
 			case "MOVE":
 				switch message.Payload {
 				case "UP", "DOWN", "LEFT", "RIGHT":
@@ -251,10 +255,7 @@ func WormsServer(ws *websocket.Conn) {
 	// TODO: Make this key dynamic once we want several playfields
 	playfield := lobby.Playfield("1337")
 
-	playfield.NewMovable <- &worm
-	//t := playfield.addMovable(&worm)
-
-	//defer playfield.removeMovable(&worm)
+	playfield.Join <- &worm
 
 	quit := make(chan bool)
 
@@ -286,7 +287,7 @@ func WormsServer(ws *websocket.Conn) {
 	}()
 
 	<- quit
-	playfield.KillMovable <- &worm
+	playfield.Part <- &worm
 }
 
 func WormsHandler() websocket.Handler {
