@@ -1,30 +1,30 @@
 package flow
 
 import (
-	"testing"
-	"time"
+	"code.google.com/p/go.net/websocket"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"log"
 	"sync"
-	"code.google.com/p/go.net/websocket"
+	"testing"
+	"time"
 )
 
 var once sync.Once
 var serverAddr string
 
 func startServer() {
-		http.Handle("/worms", WormsHandler())
-		server := httptest.NewServer(nil)
-		serverAddr = server.Listener.Addr().String()
-		log.Print("Test WebSocket server listening on ", serverAddr)
+	http.Handle("/worms", WormsHandler())
+	server := httptest.NewServer(nil)
+	serverAddr = server.Listener.Addr().String()
+	log.Print("Test WebSocket server listening on ", serverAddr)
 }
 
 func newConfig(t *testing.T, path string) *websocket.Config {
-        config, _ := websocket.NewConfig(fmt.Sprintf("ws://%s%s", serverAddr, path), "http://localhost")
-        return config
+	config, _ := websocket.NewConfig(fmt.Sprintf("ws://%s%s", serverAddr, path), "http://localhost")
+	return config
 }
 
 func TestConcurrency(t *testing.T) {
@@ -52,12 +52,12 @@ func TestWormsServerConnect(t *testing.T) {
 
 	client, err := net.Dial("tcp", serverAddr)
 	if err != nil {
-			t.Fatal("dialing", err)
+		t.Fatal("dialing", err)
 	}
 	conn, err := websocket.NewClient(newConfig(t, "/worms"), client)
 	if err != nil {
-			t.Errorf("WebSocket handshake error: %v", err)
-			return
+		t.Errorf("WebSocket handshake error: %v", err)
+		return
 	}
 	defer conn.Close()
 
@@ -67,7 +67,7 @@ func TestWormsServerConnect(t *testing.T) {
 
 	var actual_msg Packet
 
-	timer := time.AfterFunc(TICK * 2 * time.Millisecond, func() {
+	timer := time.AfterFunc(TICK*2*time.Millisecond, func() {
 		t.Errorf("Timed out waiting for a reply")
 	})
 	if err := websocket.JSON.Receive(conn, &actual_msg); err != nil {

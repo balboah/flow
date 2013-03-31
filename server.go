@@ -12,16 +12,17 @@ TODO:
 package flow
 
 import (
+	"code.google.com/p/go.net/websocket"
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
-	"math/rand"
-	"code.google.com/p/go.net/websocket"
 )
+
 const (
 	BOUNDARY = 49
-	TICK = 200
+	TICK     = 200
 )
 
 type Position struct {
@@ -33,7 +34,7 @@ type Id uint
 
 type Lobby struct {
 	Playfields map[string]*Playfield
-	mu sync.Mutex
+	mu         sync.Mutex
 }
 
 var lobby Lobby = Lobby{Playfields: make(map[string]*Playfield)}
@@ -64,17 +65,17 @@ func (l Lobby) Playfield(key string) *Playfield {
 }
 
 type Playfield struct {
-	Movables map[Movable]Id
-	Ticker *time.Ticker
-	Join chan Movable
-	Part chan Movable
+	Movables  map[Movable]Id
+	Ticker    *time.Ticker
+	Join      chan Movable
+	Part      chan Movable
 	Broadcast chan Packet
-	LastId Id
+	LastId    Id
 }
 
 type Transport struct {
 	Outbox chan Packet
-	Inbox chan Packet
+	Inbox  chan Packet
 }
 
 func (p *Playfield) addMovable(m Movable) {
@@ -121,9 +122,9 @@ func (p *Playfield) Start() {
 				for m, id := range p.Movables {
 					c := m.Channel()
 					select {
-						case c.Outbox <- packet:
-						default:
-							log.Print("Could not send packet to movable:", id)
+					case c.Outbox <- packet:
+					default:
+						log.Print("Could not send packet to movable:", id)
 					}
 				}
 			}
@@ -148,9 +149,9 @@ type Movable interface {
 }
 
 type Worm struct {
-	position Position
+	position  Position
 	direction string
-	C Transport
+	C         Transport
 }
 
 func NewWorm() Worm {
@@ -172,21 +173,21 @@ func (w *Worm) Channel() Transport {
 
 func (w *Worm) Communicate() {
 	select {
-		// Direction changes is the only thing we expect on the inbox right now
-		case message := <- w.C.Inbox:
-			switch message.Command {
-			case "KILL":
-				close(w.C.Outbox)
-			case "MOVE":
-				switch message.Payload {
-				case "UP", "DOWN", "LEFT", "RIGHT":
-					w.direction = message.Payload
-				}
-			case "HELLO":
-			default:
-				log.Print("Unknown command:", message)
+	// Direction changes is the only thing we expect on the inbox right now
+	case message := <-w.C.Inbox:
+		switch message.Command {
+		case "KILL":
+			close(w.C.Outbox)
+		case "MOVE":
+			switch message.Payload {
+			case "UP", "DOWN", "LEFT", "RIGHT":
+				w.direction = message.Payload
 			}
+		case "HELLO":
 		default:
+			log.Print("Unknown command:", message)
+		}
+	default:
 	}
 }
 
@@ -286,7 +287,7 @@ func WormsServer(ws *websocket.Conn) {
 		quit <- true
 	}()
 
-	<- quit
+	<-quit
 	playfield.Part <- &worm
 }
 
