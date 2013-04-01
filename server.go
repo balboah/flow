@@ -154,9 +154,9 @@ type Worm struct {
 	C         Transport
 }
 
-func NewWorm() Worm {
+func NewWorm() *Worm {
 	t := Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1)}
-	return Worm{position: Position{25, 25}, C: t}
+	return &Worm{position: Position{25, 25}, C: t}
 }
 
 func (w *Worm) Kill() {
@@ -176,12 +176,24 @@ func (w *Worm) Communicate() {
 	// Direction changes is the only thing we expect on the inbox right now
 	case message := <-w.C.Inbox:
 		switch message.Command {
-		case "KILL":
-			close(w.C.Outbox)
 		case "MOVE":
 			switch message.Payload {
-			case "UP", "DOWN", "LEFT", "RIGHT":
-				w.direction = message.Payload
+			case "UP":
+				if w.direction != "DOWN" {
+					w.direction = message.Payload
+				}
+			case "DOWN":
+				if w.direction != "UP" {
+					w.direction = message.Payload
+				}
+			case "LEFT":
+				if w.direction != "RIGHT" {
+					w.direction = message.Payload
+				}
+			case "RIGHT":
+				if w.direction != "LEFT" {
+					w.direction = message.Payload
+				}
 			}
 		case "HELLO":
 		default:
@@ -256,7 +268,7 @@ func WormsServer(ws *websocket.Conn) {
 	// TODO: Make this key dynamic once we want several playfields
 	playfield := lobby.Playfield("1337")
 
-	playfield.Join <- &worm
+	playfield.Join <- worm
 
 	quit := make(chan bool)
 
@@ -272,6 +284,7 @@ func WormsServer(ws *websocket.Conn) {
 			log.Print("Got data on worms server", message)
 			worm.C.Inbox <- message
 		}
+		close(worm.C.Inbox)
 		quit <- true
 	}()
 
@@ -288,7 +301,7 @@ func WormsServer(ws *websocket.Conn) {
 	}()
 
 	<-quit
-	playfield.Part <- &worm
+	playfield.Part <- worm
 }
 
 func WormsHandler() websocket.Handler {

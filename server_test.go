@@ -132,10 +132,22 @@ func TestCommunicate(t *testing.T) {
 		done <- 1
 	}()
 
-	w.C.Inbox <- Packet{Command: "MOVE", Payload: "LEFT"}
+	w.C.Inbox <- Packet{Command: "MOVE", Payload: "UP"}
 	<-done
 
-	if d := w.Direction(); d != "LEFT" {
+	if d := w.Direction(); d != "UP" {
 		t.Error("Did not obey communicated command, direction is:", d)
+	}
+
+	go func() {
+		w.Communicate()
+		done <- 1
+	}()
+
+	w.C.Inbox <- Packet{Command: "MOVE", Payload: "DOWN"}
+	<-done
+
+	if d := w.Direction(); d == "DOWN" {
+		t.Error("Should not be able to move in opposite direction")
 	}
 }
