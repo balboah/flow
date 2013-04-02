@@ -7,5 +7,10 @@ type Position struct {
 
 type Packet struct {
 	Command string
-	Payload string
+	Payload interface{}
+}
+
+type MovePayload struct {
+	Id Id
+	Positions []Position
 }

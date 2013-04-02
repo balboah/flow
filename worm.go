@@ -1,7 +1,6 @@
 package flow
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 )
@@ -23,8 +22,8 @@ func (w *Worm) Kill() {
 	close(w.C.Outbox)
 }
 
-func (w *Worm) Position() string {
-	return fmt.Sprintf("%d,%d", w.position.X, w.position.Y)
+func (w *Worm) Position() Position {
+	return w.position
 }
 
 func (w *Worm) Channel() Transport {
@@ -37,27 +36,32 @@ func (w *Worm) Communicate() {
 	case message := <-w.C.Inbox:
 		switch message.Command {
 		case "MOVE":
-			switch message.Payload {
+			payload, ok := message.Payload.(string)
+			if !ok {
+				log.Print("Got invalid payload for MOVE command")
+				break
+			}
+			switch payload {
 			case "UP":
 				if w.direction != "DOWN" {
-					w.direction = message.Payload
+					w.direction = payload
 				}
 			case "DOWN":
 				if w.direction != "UP" {
-					w.direction = message.Payload
+					w.direction = payload
 				}
 			case "LEFT":
 				if w.direction != "RIGHT" {
-					w.direction = message.Payload
+					w.direction = payload
 				}
 			case "RIGHT":
 				if w.direction != "LEFT" {
-					w.direction = message.Payload
+					w.direction = payload
 				}
 			}
 		case "HELLO":
 		default:
-			log.Print("Unknown command:", message)
+			log.Print("Unknown command:", message.Command)
 		}
 	default:
 	}
