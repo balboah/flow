@@ -45,15 +45,33 @@ $(function(){
 	ws.onmessage = function(ev) {
 		var packet = JSON.parse(ev.data);
 
-		ServerCommands[packet.Command](packet.Payload);
+		ServerCommands[packet.Command.toLowerCase()](packet.Payload);
 	};
 
 	// Game commands received from server
 	var ServerCommands = {
-		MOVE: function(payload){
-			flow.moveWorm.apply(flow, payload.split(','));
+		move: function(payload) {
+			// TODO: remove this once new payload structure is implemented
+			var parts = payload.split(','),
+				x = parseInt(parts[1], 10),
+				y = parseInt(parts[2], 10);
+			payload = {
+				Id: parts[0],
+				Positions: [
+					[x, y],
+					[x, y + 1],
+					[x + 4, y + 1],
+					[x + 4, y + 3],
+					[x + 2, y + 3],
+					[x + 2, y + 6],
+					[x - 1, y + 6],
+					[x - 1, y + 3]
+				]
+			};
+			// TODO: remove until here
+			flow.getWorm(payload.Id).move(payload.Positions);
 		},
-		KILL: function(payload){
+		kill: function(payload) {
 			flow.kill(payload);
 		}
 	};
