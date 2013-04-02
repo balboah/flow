@@ -30,13 +30,6 @@
 		return this.worms[id];
 	};
 
-	Flow.prototype.moveWorm = function(id, x, y) {
-		this.getWorm(id).move(
-			parseInt(x, 10) * this.options.grid,
-			parseInt(y, 10) * this.options.grid
-		);
-	};
-
 	Flow.prototype.kill = function(id) {
 		if (this.worms[id]) {
 			this.worms[id].kill();

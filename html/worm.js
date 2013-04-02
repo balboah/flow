@@ -7,22 +7,12 @@
 	var Worm = function(id, flow) {
 		this.id = id;
 
-		var size = flow.options.grid;
+		this.color = 'rgb(' + randomColor() + ',' + randomColor() + ',' + randomColor() + ')';
 
-		this.x = - size;
-		this.y = - size;
-
+		this.flow = flow;
 		this.layer = new Kinetic.Layer();
 
-		this.dot = new Kinetic.Rect({
-			width: size,
-			height: size,
-			x: - size,
-			y: - size,
-			fill: 'rgb(' + randomColor() + ',' + randomColor() + ',' + randomColor() + ')',
-			cornerRadius: Math.floor(size / 3)
-		});
-		this.layer.add(this.dot);
+		this.parts = [];
 
 		flow.stage.add(this.layer);
 
@@ -31,21 +21,55 @@
 		return this;
 	};
 
-	Worm.prototype.move = function(x, y) {
-		if (this.dot.getX() < 0) {
-			this.dot.setPosition(x, y);
+	Worm.prototype.split = function(count) {
+		if (count > this.parts.length) {
+			var size = this.flow.options.grid,
+				i = this.parts.length,
+				part;
+
+			for (; i < count; i++) {
+				part = new Kinetic.Rect({
+					width: size,
+					height: size,
+					x: - size,
+					y: - size,
+					fill: this.color
+				});
+				this.parts.push(part);
+				this.layer.add(part);
+			}
 		}
-		else {
-			this.dot.transitionTo({
-				x: x,
-				y: y,
-				duration: 0.2
-			});
+	};
+
+	Worm.prototype.move = function(positions) {
+		var grid = this.flow.options.grid,
+			i = 0,
+			l = positions.length - 1,
+			pos, next,
+			x, y,
+			w, h;
+
+		this.split(l);
+
+		for (; i < l; i++) {
+			pos = positions[i];
+			next = positions[i + 1];
+
+			x = (pos.X <= next.X ? pos.X : next.X + 1);
+			y = (pos.Y <= next.Y ? pos.Y : next.Y + 1);
+			w = Math.max(1, Math.abs(pos.X - next.X));
+			h = Math.max(1, Math.abs(pos.Y - next.Y));
+
+			this.parts[i].setPosition(x * grid, y * grid);
+			this.parts[i].setSize(w * grid, h * grid);
 		}
+
+		this.layer.draw();
 	};
 
 	Worm.prototype.kill = function() {
 		this.layer.destroy();
+		delete this.flow;
 	};
 
 	window.Worm = Worm;
