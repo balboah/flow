@@ -6,7 +6,7 @@ type Movable interface {
 	MoveUp() bool
 	MoveDown() bool
 	Direction() string
-	Position() Position
+	Positions() []Position
 	Channel() Transport
 	Communicate()
 	Kill()

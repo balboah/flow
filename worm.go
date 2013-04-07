@@ -22,8 +22,8 @@ func (w *Worm) Kill() {
 	close(w.C.Outbox)
 }
 
-func (w *Worm) Position() Position {
-	return w.position
+func (w *Worm) Positions() []Position {
+	return []Position{w.position}
 }
 
 func (w *Worm) Channel() Transport {
