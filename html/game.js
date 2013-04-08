@@ -2,7 +2,17 @@ $(function(){
 
 	var ws = new WebSocket('ws://' + document.location.host + '/worms');
 
-	var flow = new Flow();
+	var $window = $(window);
+
+	var flow = new Flow({
+		grid: Math.max(5, Math.floor(Math.min($window.width(), $window.height()) / 50))
+	});
+
+	$window.resize(function(){
+		flow.update({
+			grid: Math.max(5, Math.floor(Math.min($window.width(), $window.height()) / 50))
+		});
+	});
 
 	function cmd(data) {
 		ws.send(JSON.stringify(data));

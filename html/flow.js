@@ -39,6 +39,19 @@
 		}
 	};
 
+	Flow.prototype.update = function(_options) {
+		var oldGrid = this.options.grid;
+
+		this.options = $.extend(this.options, _options);
+
+		if (_options.grid !== oldGrid) {
+			this.stage.setWidth(this.options.cols * this.options.grid);
+			this.stage.setHeight(this.options.rows * this.options.grid);
+
+			// TODO: resize worms, after merge with payload branch
+		}
+	};
+
 	Flow.prototype.grid = function(enable) {
 		if (!this.gridLayer) {
 			this.gridLayer = new Kinetic.Layer();

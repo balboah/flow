@@ -1,6 +1,30 @@
+html, body {
+	min-height: 100%;
+	background: #f6f6f6;
+}
 
 #playfield {
-	width: 500px;
-	height: 500px;
-	border: solid 2px #ccc;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	text-align: center;
 }
+	#playfield:before {
+		content: '';
+		height: 100%;
+		display: inline-block;
+		vertical-align: middle;
+		margin-right: -.25em;
+	}
+	#playfield .kineticjs-content {
+		display: inline-block;
+		vertical-align: middle;
+		background: #fff;
+		border: solid 2px #ccc;
+	}
+		#playfield .kineticjs-content canvas {
+			top: 0;
+			left: 0;
+		}
