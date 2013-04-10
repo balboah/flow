@@ -89,9 +89,9 @@ func (p *Playfield) Start() {
 					case "RIGHT":
 						m.MoveRight()
 					}
-					// TODO: Make the payload a struct as well
-					payload := MovePayload{Id: id, Positions: m.Positions()}
-					p.Broadcast <- Packet{Command: "MOVE", Payload: payload}
+					p.Broadcast <- Packet{
+						Command: "MOVE",
+						Payload: MovePayload{Id: id, Positions: m.(Attachable).Positions()}}
 				}
 			case packet := <-p.Broadcast:
 				for m, id := range p.Movables {

@@ -28,7 +28,7 @@ func newConfig(t *testing.T, path string) *websocket.Config {
 }
 
 func TestConcurrency(t *testing.T) {
-	times := 100
+	times := 10
 	done := make(chan int)
 	for n := 0; n < times; n++ {
 		go func() {
@@ -149,5 +149,20 @@ func TestCommunicate(t *testing.T) {
 
 	if d := w.Direction(); d == "DOWN" {
 		t.Error("Should not be able to move in opposite direction")
+	}
+}
+
+func TestAttachable(t *testing.T) {
+	w1 := Attachable(NewWorm())
+	w2 := Attachable(NewWorm())
+
+	if err := w1.Attach(w2); err != nil {
+		t.Error("Error attaching:", err)
+	}
+	if w, _ := w1.Next(); w != w2 {
+		t.Error("Expected w2")
+	}
+	if l := len(w1.(Attachable).Positions()); l != 2 {
+		t.Error("Expected 2 Positions for two attachables got", l)
 	}
 }

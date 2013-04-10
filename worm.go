@@ -7,7 +7,16 @@ import (
 
 const BOUNDARY = 49
 
+type attachError struct {
+	msg string
+}
+
+func (e *attachError) Error() string {
+	return e.msg
+}
+
 type Worm struct {
+	attached  Attachable
 	position  Position
 	direction string
 	C         Transport
@@ -22,8 +31,8 @@ func (w *Worm) Kill() {
 	close(w.C.Outbox)
 }
 
-func (w *Worm) Positions() []Position {
-	return []Position{w.position}
+func (w *Worm) Position() Position {
+	return w.position
 }
 
 func (w *Worm) Channel() Transport {
@@ -117,4 +126,31 @@ func (w *Worm) MoveDown() bool {
 		return true
 	}
 	return false
+}
+
+func (w *Worm) Next() (Attachable, error) {
+	var err error
+	if w.attached == nil {
+		err = &attachError{"Nothing attached"}
+	}
+	return w.attached, err
+}
+
+func (w *Worm) Attach(a Attachable) error {
+	if w.attached != nil {
+		return &attachError{"Already attached"}
+	}
+	w.attached = a
+
+	return nil
+}
+
+func (w *Worm) Positions() []Position {
+	if w.attached != nil {
+		nextPos := w.attached.Positions()
+		pos := make([]Position, 1, len(nextPos)+1)
+		pos[0] = w.position
+		return append(pos, nextPos...)
+	}
+	return []Position{w.position}
 }

@@ -6,8 +6,16 @@ type Movable interface {
 	MoveUp() bool
 	MoveDown() bool
 	Direction() string
-	Positions() []Position
 	Channel() Transport
 	Communicate()
 	Kill()
+}
+
+type Attachable interface {
+	// Get the attached
+	Next() (Attachable, error)
+	// Attach another
+	Attach(Attachable) error
+	// Get next positions as well as our own
+	Positions() []Position
 }
