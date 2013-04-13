@@ -5,11 +5,16 @@ import (
 	"math/rand"
 )
 
-const BOUNDARY = 49
+const (
+	BOUNDARY = 49
+	TAIL = 10
+)
 
 type attachError struct {
 	msg string
 }
+
+type Length uint
 
 func (e *attachError) Error() string {
 	return e.msg
@@ -24,13 +29,12 @@ func (b *Block) Next() (Attachable) {
 	return b.attached
 }
 
-func (b *Block) Attach(a Attachable) error {
+func (b *Block) Attach(a Attachable) {
 	if b.attached != nil {
-		return &attachError{"Already attached"}
+		b.attached.Attach(a)
+	} else {
+		b.attached = a
 	}
-	b.attached = a
-
-	return nil
 }
 
 func (b *Block) Positions() []Position {
@@ -53,15 +57,16 @@ func (b *Block) Follow(p Position) {
 
 type Worm struct {
 	Block
-	attached  Attachable
-	position  Position
 	direction string
 	C         Transport
 }
 
 func NewWorm() *Worm {
 	t := Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1)}
-	return &Worm{position: Position{25, 25}, C: t}
+	w := &Worm{Block: Block{position: Position{25, 25}}, C: t}
+	w.AddTail(TAIL)
+
+	return w
 }
 
 func (w *Worm) Kill() {
@@ -110,6 +115,11 @@ func (w *Worm) Communicate() {
 			log.Print("Unknown command:", message.Command)
 		}
 	default:
+	}
+
+	tail := w.Next()
+	if tail != nil {
+		tail.Follow(w.position)
 	}
 }
 
@@ -163,4 +173,13 @@ func (w *Worm) MoveDown() bool {
 		return true
 	}
 	return false
+}
+
+func (w *Worm) AddTail(l Length) (total Length) {
+		for n := 0; n < int(l); n++ {
+			log.Print("Attach")
+			w.Attach(&Block{position: w.position})
+		}
+
+		return Length(len(w.Next().Positions()))
 }

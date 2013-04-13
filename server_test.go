@@ -83,7 +83,7 @@ func TestWormsServerConnect(t *testing.T) {
 }
 
 func TestWormMovability(t *testing.T) {
-	w := Worm{position: Position{25, 25}}
+	w := NewWorm()
 
 	if d := w.Direction(); d == "" {
 		t.Errorf("Expeceted direction to be initialized")
@@ -153,16 +153,44 @@ func TestCommunicate(t *testing.T) {
 }
 
 func TestAttachable(t *testing.T) {
-	w1 := Attachable(NewWorm())
-	tail := &Block{position: Position{X: 1, Y: 2}}
+	head := &Block{position: Position{X: 1, Y: 1}}
+	tail := &Block{position: Position{X: 0, Y: 0}}
 
-	if err := w1.Attach(tail); err != nil {
-		t.Error("Error attaching:", err)
-	}
-	if w := w1.Next(); w != tail {
+	head.Attach(tail)
+	if w := head.Next(); w != tail {
 		t.Error("Expected tail")
 	}
-	if l := len(w1.(Attachable).Positions()); l != 2 {
+
+	positions := head.Positions()
+	if l := len(positions); l != 2 {
 		t.Error("Expected 2 Positions for two attachables got", l)
+	}
+
+	correct := []Position{Position{X: 1, Y: 1}, Position{X: 0, Y: 0}}
+	if positions[0] != correct[0] {
+		t.Error("Wrong position for worm", positions[0])
+	}
+	if positions[1] != correct[1] {
+		t.Error("Wrong position for tail", positions[1])
+	}
+
+	head.Follow(Position{2, 2})
+	correct = []Position{Position{X: 2, Y: 2}, Position{X: 1, Y: 1}}
+	positions = head.Positions()
+		if positions[0] != correct[0] {
+		t.Error("Wrong position for worm", positions[0])
+	}
+	if positions[1] != correct[1] {
+		t.Error("Wrong position for tail", positions[1])
+	}
+}
+
+func TestTail(t *testing.T) {
+	w1 := NewWorm()
+	original := len(Attachable(w1).Positions())
+	w1.AddTail(1)
+
+	if l := len(Attachable(w1).Positions()); l != original + 1 {
+		t.Error("Expected +1 Positions for two attachables got total of", l)
 	}
 }

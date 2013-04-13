@@ -15,7 +15,7 @@ type Attachable interface {
 	// Get the attached
 	Next() Attachable
 	// Attach another
-	Attach(Attachable) error
+	Attach(Attachable)
 	// Get next positions as well as our own
 	Positions() []Position
 	// Update position of this
