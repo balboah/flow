@@ -177,7 +177,7 @@ func TestAttachable(t *testing.T) {
 	head.Follow(Position{2, 2})
 	correct = []Position{Position{X: 2, Y: 2}, Position{X: 1, Y: 1}}
 	positions = head.Positions()
-		if positions[0] != correct[0] {
+	if positions[0] != correct[0] {
 		t.Error("Wrong position for worm", positions[0])
 	}
 	if positions[1] != correct[1] {
@@ -190,7 +190,7 @@ func TestTail(t *testing.T) {
 	original := len(Attachable(w1).Positions())
 	w1.AddTail(1)
 
-	if l := len(Attachable(w1).Positions()); l != original + 1 {
+	if l := len(Attachable(w1).Positions()); l != original+1 {
 		t.Error("Expected +1 Positions for two attachables got total of", l)
 	}
 }

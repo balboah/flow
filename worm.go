@@ -7,7 +7,7 @@ import (
 
 const (
 	BOUNDARY = 49
-	TAIL = 10
+	TAIL     = 10
 )
 
 type attachError struct {
@@ -25,7 +25,7 @@ type Block struct {
 	position Position
 }
 
-func (b *Block) Next() (Attachable) {
+func (b *Block) Next() Attachable {
 	return b.attached
 }
 
@@ -176,10 +176,10 @@ func (w *Worm) MoveDown() bool {
 }
 
 func (w *Worm) AddTail(l Length) (total Length) {
-		for n := 0; n < int(l); n++ {
-			log.Print("Attach")
-			w.Attach(&Block{position: w.position})
-		}
+	for n := 0; n < int(l); n++ {
+		log.Print("Attach")
+		w.Attach(&Block{position: w.position})
+	}
 
-		return Length(len(w.Next().Positions()))
+	return Length(len(w.Next().Positions()))
 }

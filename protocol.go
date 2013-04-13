@@ -11,6 +11,6 @@ type Packet struct {
 }
 
 type MovePayload struct {
-	Id Id
+	Id        Id
 	Positions []Position
 }
