@@ -15,3 +15,8 @@ For each game there should be at least two players each controlling their own sn
 Collect points by picking up spawned "food" while avoiding colliding with your own- or the other players tail.
 
 More food means higher score, higher score wins!
+
+Try it live:
+----------
+
+A running version will always be available at http://worms.joonix.se:5000/
