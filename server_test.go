@@ -154,13 +154,13 @@ func TestCommunicate(t *testing.T) {
 
 func TestAttachable(t *testing.T) {
 	w1 := Attachable(NewWorm())
-	w2 := Attachable(NewWorm())
+	tail := &Block{position: Position{X: 1, Y: 2}}
 
-	if err := w1.Attach(w2); err != nil {
+	if err := w1.Attach(tail); err != nil {
 		t.Error("Error attaching:", err)
 	}
-	if w, _ := w1.Next(); w != w2 {
-		t.Error("Expected w2")
+	if w := w1.Next(); w != tail {
+		t.Error("Expected tail")
 	}
 	if l := len(w1.(Attachable).Positions()); l != 2 {
 		t.Error("Expected 2 Positions for two attachables got", l)

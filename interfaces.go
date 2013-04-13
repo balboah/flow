@@ -13,9 +13,12 @@ type Movable interface {
 
 type Attachable interface {
 	// Get the attached
-	Next() (Attachable, error)
+	Next() Attachable
 	// Attach another
 	Attach(Attachable) error
 	// Get next positions as well as our own
 	Positions() []Position
+	// Update position of this
+	// Sets Next() to our old position
+	Follow(Position)
 }

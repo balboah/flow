@@ -15,7 +15,44 @@ func (e *attachError) Error() string {
 	return e.msg
 }
 
+type Block struct {
+	attached Attachable
+	position Position
+}
+
+func (b *Block) Next() (Attachable) {
+	return b.attached
+}
+
+func (b *Block) Attach(a Attachable) error {
+	if b.attached != nil {
+		return &attachError{"Already attached"}
+	}
+	b.attached = a
+
+	return nil
+}
+
+func (b *Block) Positions() []Position {
+	if b.attached != nil {
+		nextPos := b.attached.Positions()
+		pos := make([]Position, 1, len(nextPos)+1)
+		pos[0] = b.position
+		return append(pos, nextPos...)
+	}
+	return []Position{b.position}
+}
+
+func (b *Block) Follow(p Position) {
+	next := b.Next()
+	if next != nil {
+		next.Follow(b.position)
+	}
+	b.position = p
+}
+
 type Worm struct {
+	Block
 	attached  Attachable
 	position  Position
 	direction string
@@ -126,31 +163,4 @@ func (w *Worm) MoveDown() bool {
 		return true
 	}
 	return false
-}
-
-func (w *Worm) Next() (Attachable, error) {
-	var err error
-	if w.attached == nil {
-		err = &attachError{"Nothing attached"}
-	}
-	return w.attached, err
-}
-
-func (w *Worm) Attach(a Attachable) error {
-	if w.attached != nil {
-		return &attachError{"Already attached"}
-	}
-	w.attached = a
-
-	return nil
-}
-
-func (w *Worm) Positions() []Position {
-	if w.attached != nil {
-		nextPos := w.attached.Positions()
-		pos := make([]Position, 1, len(nextPos)+1)
-		pos[0] = w.position
-		return append(pos, nextPos...)
-	}
-	return []Position{w.position}
 }
