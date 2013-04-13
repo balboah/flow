@@ -1,4 +1,4 @@
-Flow
+Flow [![Build Status](https://travis-ci.org/balboah/flow.png)](https://travis-ci.org/balboah/flow)
 ====
 
 What's this?
