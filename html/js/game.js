@@ -8,7 +8,7 @@
 		ws: null,
 
 		init: function(){
-			game.flow = new Flow({
+			game.field = new Field({
 				grid: game.gridSize()
 			});
 
@@ -19,7 +19,7 @@
 		// Sets up a resize handler to update the grid size
 		flexible: function(){
 			$window.resize(function(){
-				game.flow.update({
+				game.field.update({
 					grid: game.gridSize()
 				});
 			});
@@ -70,7 +70,7 @@
 					}
 					// Enable/Disable the grid: `g`
 					if (ev.keyCode === 71) {
-						flow.grid();
+						game.field.grid();
 					}
 				});
 			};
@@ -86,11 +86,11 @@
 		commands: {
 
 			move: function(payload) {
-				game.flow.getWorm(payload.Id).move(payload.Positions);
+				game.field.getWorm(payload.Id).move(payload.Positions);
 			},
 
 			kill: function(payload) {
-				game.flow.kill(payload);
+				game.field.kill(payload);
 			}
 
 		}
