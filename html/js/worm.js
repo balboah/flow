@@ -28,40 +28,78 @@
 				part;
 
 			for (; i < count; i++) {
-				part = new Kinetic.Rect({
-					width: size,
-					height: size,
-					x: - size,
-					y: - size,
-					fill: this.color
-				});
+				if (i === 0) {
+					part = new Kinetic.Wedge({
+						radius: size / 2,
+						angleDeg: 180,
+						rotationDeg: 0,
+						fill: this.color
+					});
+				}
+				else {
+					part = new Kinetic.Rect({
+						width: size,
+						height: size,
+						fill: this.color
+					});
+				}
 				this.parts.push(part);
 				this.layer.add(part);
 			}
+
+			this.parts[0].moveToTop();
 		}
 	};
 
 	Worm.prototype.move = function(positions) {
 		var grid = this.flow.options.grid,
+			half = grid / 2,
 			i = 0,
 			l = positions.length - 1,
-			pos, next,
+			curr, next,
+			part,
 			x, y,
 			w, h;
 
 		this.split(l);
 
 		for (; i < l; i++) {
-			pos = positions[i];
+			curr = positions[i];
 			next = positions[i + 1];
 
-			x = (pos.X <= next.X ? pos.X : next.X + 1);
-			y = (pos.Y <= next.Y ? pos.Y : next.Y + 1);
-			w = Math.max(1, Math.abs(pos.X - next.X));
-			h = Math.max(1, Math.abs(pos.Y - next.Y));
+			x = (curr.X <= next.X ? curr.X : next.X + 1) * grid;
+			y = (curr.Y <= next.Y ? curr.Y : next.Y + 1) * grid;
+			w = Math.max(1, Math.abs(curr.X - next.X));
+			h = Math.max(1, Math.abs(curr.Y - next.Y));
 
-			this.parts[i].setPosition(x * grid, y * grid);
-			this.parts[i].setSize(w * grid, h * grid);
+			part = this.parts[i];
+
+			if (i === 0) {
+				if (curr.X === next.X) {
+					if (curr.Y < next.Y) {
+						part.setRotationDeg(180);
+						part.setPosition(x + half, y + grid);
+					}
+					if (curr.Y > next.Y) {
+						part.setRotationDeg(0);
+						part.setPosition(x + half, y);
+					}
+				}
+				else if (curr.Y === next.Y) {
+					if (curr.X < next.X) {
+						part.setPosition(x + grid, y + half);
+						part.setRotationDeg(90);
+					}
+					if (curr.X > next.X) {
+						part.setPosition(x, y + half);
+						part.setRotationDeg(270);
+					}
+				}
+			}
+			else {
+				part.setPosition(x, y);
+				part.setSize(w * grid, h * grid);
+			}
 		}
 
 		this.layer.draw();
