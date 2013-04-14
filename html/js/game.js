@@ -1,71 +1,100 @@
-$(function(){
+(function(){
 
-	var ws = new WebSocket('ws://' + document.location.host + '/worms');
+	var $window = $(window),
+		$document = $(document);
 
-	var $window = $(window);
+	var game = window.game = {
 
-	var flow = new Flow({
-		grid: Math.max(5, Math.floor(Math.min($window.width(), $window.height()) / 50))
-	});
+		ws: null,
 
-	$window.resize(function(){
-		flow.update({
-			grid: Math.max(5, Math.floor(Math.min($window.width(), $window.height()) / 50))
-		});
-	});
+		init: function(){
+			game.flow = new Flow({
+				grid: game.gridSize()
+			});
 
-	function cmd(data) {
-		ws.send(JSON.stringify(data));
-	}
-
-	// When the connection is open, send some data to the server
-	ws.onopen = function() {
-		cmd({
-			Command: "HELLO"
-		});
-
-		$(document).keydown(function(ev) {
-			if ([37, 38, 39, 40].indexOf(ev.keyCode) > -1) {
-				ev.preventDefault();
-
-				var dir = {
-					37: 'LEFT',
-					38: 'UP',
-					39: 'RIGHT',
-					40: 'DOWN'
-				}[ev.keyCode];
-
-				cmd({
-					Command: "MOVE",
-					Payload: dir
-				});
-			}
-			if (ev.keyCode == 71) {
-				flow.grid();
-			}
-		});
-	};
-
-	// Log errors
-	ws.onerror = function(error) {
-		console.error('WebSocket Error ', error);
-	};
-
-	// Log messages from the server
-	ws.onmessage = function(ev) {
-		var packet = JSON.parse(ev.data);
-
-		ServerCommands[packet.Command.toLowerCase()](packet.Payload);
-	};
-
-	// Game commands received from server
-	var ServerCommands = {
-		move: function(payload) {
-			flow.getWorm(payload.Id).move(payload.Positions);
+			game.flexible();
+			game.connect();
 		},
-		kill: function(payload) {
-			flow.kill(payload);
+
+		// Sets up a resize handler to update the grid size
+		flexible: function(){
+			$window.resize(function(){
+				game.flow.update({
+					grid: game.gridSize()
+				});
+			});
+		},
+
+		// Determine the grid size for the current window size
+		gridSize: function(){
+			return Math.max(5, Math.floor(Math.min($window.width(), $window.height()) / 50));
+		},
+
+		// Opens a WebSocket connection to the server
+		connect: function(){
+			var ws = game.ws = new WebSocket('ws://' + document.location.host + '/worms');
+
+			// Log errors
+			ws.onerror = function(error){
+				console.error('WebSocket Error', error);
+			};
+
+			// Log messages from the server
+			ws.onmessage = function(ev){
+				var packet = JSON.parse(ev.data);
+				game.commands[packet.Command.toLowerCase()](packet.Payload);
+			};
+
+			// When the connection is open, send some data to the server
+			ws.onopen = function(){
+				game.send({
+					Command: "HELLO"
+				});
+
+				$document.keydown(function(ev){
+					// Control the worm: arrow keys
+					if ([37, 38, 39, 40].indexOf(ev.keyCode) > -1) {
+						ev.preventDefault();
+
+						var dir = {
+							37: 'LEFT',
+							38: 'UP',
+							39: 'RIGHT',
+							40: 'DOWN'
+						}[ev.keyCode];
+
+						game.send({
+							Command: "MOVE",
+							Payload: dir
+						});
+					}
+					// Enable/Disable the grid: `g`
+					if (ev.keyCode === 71) {
+						flow.grid();
+					}
+				});
+			};
+
+		},
+
+		// Send packet to server
+		send: function(data){
+			game.ws.send(JSON.stringify(data));
+		},
+
+		// Game commands received from server
+		commands: {
+
+			move: function(payload) {
+				game.flow.getWorm(payload.Id).move(payload.Positions);
+			},
+
+			kill: function(payload) {
+				game.flow.kill(payload);
+			}
+
 		}
+
 	};
 
-});
+})();
