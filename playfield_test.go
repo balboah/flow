@@ -1,7 +1,7 @@
 package flow
 
 import (
-	"strconv"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -24,7 +24,7 @@ func TestAddRemoveMovable(t *testing.T) {
 		case packet := <-playfield.Broadcast:
 			if packet.Command != "KILL" {
 				t.Errorf("Expected KILL packet")
-			} else if packet.Payload.(string) != strconv.FormatInt(int64(n), 10) {
+			} else if packet.Payload.(string) != fmt.Sprintf("%d", n) {
 				t.Errorf("Expected payload to be id %d of worm, got: %v", n, packet.Payload)
 			}
 
