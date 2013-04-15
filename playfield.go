@@ -7,10 +7,12 @@ import (
 	"time"
 )
 
+// How fast playfields switch packets to clients
 const TICK = 200
 
 type Id uint
 
+// The lobby takes care of listing all playfields
 type Lobby struct {
 	Playfields map[string]*Playfield
 	mu         sync.Mutex
@@ -32,6 +34,7 @@ func (l Lobby) Playfield(key string) *Playfield {
 	return p
 }
 
+// A playfield is responsible of communicating between clients
 type Playfield struct {
 	Movables  map[Movable]Id
 	Ticker    *time.Ticker

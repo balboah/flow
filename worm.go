@@ -6,29 +6,25 @@ import (
 )
 
 const (
-	BOUNDARY = 49
-	TAIL     = 10
+	BOUNDARY = 49 // The outer boundary of a playfield
+	TAIL     = 10 // Starting length of the worm tail
 )
-
-type attachError struct {
-	msg string
-}
 
 type Length uint
 
-func (e *attachError) Error() string {
-	return e.msg
-}
-
+// A "pixel" block on the playfield
+// Attackable to other blocks forming a chain
 type Block struct {
 	attached Attachable
 	position Position
 }
 
+// Get next block in chain
 func (b *Block) Next() Attachable {
 	return b.attached
 }
 
+// Attach next block
 func (b *Block) Attach(a Attachable) {
 	if b.attached != nil {
 		b.attached.Attach(a)
@@ -37,6 +33,7 @@ func (b *Block) Attach(a Attachable) {
 	}
 }
 
+// Get positions of all blocks in the chain
 func (b *Block) Positions() []Position {
 	if b.attached != nil {
 		nextPos := b.attached.Positions()
@@ -47,6 +44,7 @@ func (b *Block) Positions() []Position {
 	return []Position{b.position}
 }
 
+// Update the position of this and subsequent blocks
 func (b *Block) Follow(p Position) {
 	next := b.Next()
 	if next != nil {
@@ -55,6 +53,7 @@ func (b *Block) Follow(p Position) {
 	b.position = p
 }
 
+// The player controlled worm
 type Worm struct {
 	Block
 	direction string
@@ -81,6 +80,7 @@ func (w *Worm) Channel() Transport {
 	return w.C
 }
 
+// Process incoming packets
 func (w *Worm) Communicate() {
 	select {
 	// Direction changes is the only thing we expect on the inbox right now
@@ -117,12 +117,12 @@ func (w *Worm) Communicate() {
 	default:
 	}
 
-	tail := w.Next()
-	if tail != nil {
+	if tail := w.Next(); tail != nil {
 		tail.Follow(w.position)
 	}
 }
 
+// Get the direction we are currently going in or set one if empty
 func (w *Worm) Direction() string {
 	if w.direction == "" {
 		switch rand.Intn(4) {
@@ -175,6 +175,7 @@ func (w *Worm) MoveDown() bool {
 	return false
 }
 
+// Create a chain of Blocks to form the tail of the worm
 func (w *Worm) AddTail(l Length) (total Length) {
 	for n := 0; n < int(l); n++ {
 		w.Attach(&Block{position: w.position})

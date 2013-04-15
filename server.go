@@ -1,14 +1,5 @@
-/*
-A websocket gaming platform.
-
-TODO:
-	Snake
-	- Implement random spawning points/food that snakes can eat
-	- Have two players for each Playfield, if one eats the other the game is over. Highest points win
-	- Add a tail to the pixel to complete the worm, which grows whenever you eat a new point
-	- Create availability slots in Lobby for knowing if another player can join
-*/
-
+// An experimental project for creating a multiplayer snake game.
+// See the README.md for further description.
 package flow
 
 import (
@@ -17,6 +8,7 @@ import (
 )
 
 // This is where the action starts
+// A websocket server that creates new worms on a playfield
 func WormsServer(ws *websocket.Conn) {
 	// TODO: Set read/write timeouts
 
