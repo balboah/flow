@@ -177,7 +177,6 @@ func (w *Worm) MoveDown() bool {
 
 func (w *Worm) AddTail(l Length) (total Length) {
 	for n := 0; n < int(l); n++ {
-		log.Print("Attach")
 		w.Attach(&Block{position: w.position})
 	}
 

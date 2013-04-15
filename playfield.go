@@ -22,13 +22,7 @@ func (l Lobby) Playfield(key string) *Playfield {
 	l.mu.Lock()
 	p, ok := l.Playfields[key]
 	if ok == false {
-		p = &Playfield{
-			make(map[Movable]Id),
-			time.NewTicker(TICK * time.Millisecond),
-			make(chan Movable),
-			make(chan Movable),
-			make(chan Packet, 1024),
-			0}
+		p = NewPlayfield()
 		p.Start()
 		l.Playfields[key] = p
 		log.Printf("New playfield: %s", key)
@@ -52,6 +46,16 @@ type Transport struct {
 	Inbox  chan Packet
 }
 
+func NewPlayfield() *Playfield {
+	return &Playfield{
+		make(map[Movable]Id),
+		time.NewTicker(TICK * time.Millisecond),
+		make(chan Movable),
+		make(chan Movable),
+		make(chan Packet, 1024),
+		0}
+}
+
 func (p *Playfield) addMovable(m Movable) {
 	p.LastId++
 	p.Movables[m] = p.LastId
@@ -62,9 +66,9 @@ func (p *Playfield) addMovable(m Movable) {
 func (p *Playfield) removeMovable(m Movable) {
 	log.Print("Deleting movable", m)
 	m.Kill()
-	delete(p.Movables, m)
 
 	p.Broadcast <- Packet{"KILL", fmt.Sprintf("%d", p.Movables[m])}
+	delete(p.Movables, m)
 }
 
 func (p *Playfield) Start() {
