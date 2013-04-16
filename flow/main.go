@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"joonix.se/flow"
+	"github.com/balboah/flow"
 	"log"
 	"math/rand"
 	"net/http"
