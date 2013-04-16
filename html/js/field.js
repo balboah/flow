@@ -16,7 +16,7 @@
 	};
 
 	Field.defaults = {
-		grid: 10,
+		grid: 20,
 		cols: 50,
 		rows: 50
 	};

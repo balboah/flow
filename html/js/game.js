@@ -8,26 +8,8 @@
 		ws: null,
 
 		init: function(){
-			game.field = new Field({
-				grid: game.gridSize()
-			});
-
-			game.flexible();
+			game.field = new Field();
 			game.connect();
-		},
-
-		// Sets up a resize handler to update the grid size
-		flexible: function(){
-			$window.resize(function(){
-				game.field.update({
-					grid: game.gridSize()
-				});
-			});
-		},
-
-		// Determine the grid size for the current window size
-		gridSize: function(){
-			return Math.max(5, Math.floor(Math.min($window.width(), $window.height()) / 50));
 		},
 
 		// Opens a WebSocket connection to the server
