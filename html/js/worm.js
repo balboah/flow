@@ -40,7 +40,7 @@
 
 		this.layer.moveToTop();
 
-		this.type = Math.ceil(Math.random() * 2);
+		this.type = 1 + (id % 3);
 
 		this.image = new Image();
 		this.image.src = '/img/worm-' + this.type + '.png';
