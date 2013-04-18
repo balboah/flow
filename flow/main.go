@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/balboah/flow"
 	"log"
 	"math/rand"
@@ -9,18 +10,20 @@ import (
 	"time"
 )
 
+var (
+	root = flag.String("www", "html", "Web root to serve from")
+	port = flag.Int("port", 5000, "Port to listen on")
+)
+
 func main() {
-	var root string
-	flag.StringVar(&root,
-		"www", "/Users/johnny/Documents/workspace/go/src/joonix.se/flow/html", "Web root to serve from")
 	flag.Parse()
 
 	rand.Seed(time.Now().UTC().UnixNano())
-	log.Println("Starting flow server")
+	log.Printf("Starting flow server at %v\n", fmt.Sprintf(":%v", *port))
 	http.Handle("/worms", flow.WormsHandler())
-	http.Handle("/", http.FileServer(http.Dir(root)))
+	http.Handle("/", http.FileServer(http.Dir(*root)))
 
-	err := http.ListenAndServe(":5000", nil)
+	err := http.ListenAndServe(fmt.Sprintf(":%v", *port), nil)
 	if err != nil {
 		panic("ListenAndServe: " + err.Error())
 	}
