@@ -71,6 +71,7 @@
 
 			this.parts[0].moveToTop();
 			this.dot.moveToTop();
+			this.dot.setVisible(false);
 		}
 	};
 
