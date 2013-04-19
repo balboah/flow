@@ -12,6 +12,30 @@ const (
 
 type Length uint
 
+type Direction uint
+
+const (
+	UNKOWN Direction = iota
+	UP
+	DOWN
+	LEFT
+	RIGHT
+)
+
+func (d Direction) String() string {
+	switch d {
+	case UP:
+		return "UP"
+	case DOWN:
+		return "DOWN"
+	case LEFT:
+		return "LEFT"
+	case RIGHT:
+		return "RIGHT"
+	}
+	return ""
+}
+
 // A "pixel" block on the playfield
 // Attackable to other blocks forming a chain
 type Block struct {
@@ -56,7 +80,7 @@ func (b *Block) Follow(p Position) {
 // The player controlled worm
 type Worm struct {
 	Block
-	direction string
+	direction Direction
 	C         Transport
 }
 
@@ -94,20 +118,20 @@ func (w *Worm) Communicate() {
 			}
 			switch payload {
 			case "UP":
-				if w.direction != "DOWN" {
-					w.direction = payload
+				if w.direction != DOWN {
+					w.direction = UP
 				}
 			case "DOWN":
-				if w.direction != "UP" {
-					w.direction = payload
+				if w.direction != UP {
+					w.direction = DOWN
 				}
 			case "LEFT":
-				if w.direction != "RIGHT" {
-					w.direction = payload
+				if w.direction != RIGHT {
+					w.direction = LEFT
 				}
 			case "RIGHT":
-				if w.direction != "LEFT" {
-					w.direction = payload
+				if w.direction != LEFT {
+					w.direction = RIGHT
 				}
 			}
 		case "HELLO":
@@ -123,17 +147,17 @@ func (w *Worm) Communicate() {
 }
 
 // Get the direction we are currently going in or set one if empty
-func (w *Worm) Direction() string {
-	if w.direction == "" {
+func (w *Worm) Direction() Direction {
+	if w.direction == UNKOWN {
 		switch rand.Intn(4) {
 		case 0:
-			w.direction = "RIGHT"
+			w.direction = RIGHT
 		case 1:
-			w.direction = "LEFT"
+			w.direction = LEFT
 		case 2:
-			w.direction = "DOWN"
+			w.direction = DOWN
 		case 3:
-			w.direction = "UP"
+			w.direction = UP
 		}
 	}
 	return w.direction
@@ -142,7 +166,7 @@ func (w *Worm) Direction() string {
 func (w *Worm) MoveLeft() bool {
 	if w.position.X > 0 {
 		w.position.X--
-		w.direction = "LEFT"
+		w.direction = LEFT
 		return true
 	}
 	return false
@@ -151,7 +175,7 @@ func (w *Worm) MoveLeft() bool {
 func (w *Worm) MoveUp() bool {
 	if w.position.Y > 0 {
 		w.position.Y--
-		w.direction = "UP"
+		w.direction = UP
 		return true
 	}
 	return false
@@ -160,7 +184,7 @@ func (w *Worm) MoveUp() bool {
 func (w *Worm) MoveRight() bool {
 	if w.position.X < BOUNDARY {
 		w.position.X++
-		w.direction = "RIGHT"
+		w.direction = RIGHT
 		return true
 	}
 	return false
@@ -169,7 +193,7 @@ func (w *Worm) MoveRight() bool {
 func (w *Worm) MoveDown() bool {
 	if w.position.Y < BOUNDARY {
 		w.position.Y++
-		w.direction = "DOWN"
+		w.direction = DOWN
 		return true
 	}
 	return false

@@ -5,7 +5,7 @@ type Movable interface {
 	MoveRight() bool
 	MoveUp() bool
 	MoveDown() bool
-	Direction() string
+	Direction() Direction
 	Channel() Transport
 	Communicate()
 	Kill()

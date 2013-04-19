@@ -87,15 +87,16 @@ func (p *Playfield) Start() {
 				for m, id := range p.Movables {
 					m.Communicate()
 					switch m.Direction() {
-					case "UP":
+					case UP:
 						m.MoveUp()
-					case "DOWN":
+					case DOWN:
 						m.MoveDown()
-					case "LEFT":
+					case LEFT:
 						m.MoveLeft()
-					case "RIGHT":
+					case RIGHT:
 						m.MoveRight()
 					}
+					// TODO: Implement collition detection somewhere here
 					p.Broadcast <- Packet{
 						Command: "MOVE",
 						Payload: MovePayload{Id: id, Positions: m.(Attachable).Positions()}}

@@ -5,7 +5,7 @@ import "testing"
 func TestWormMovability(t *testing.T) {
 	w := NewWorm()
 
-	if d := w.Direction(); d == "" {
+	if d := w.Direction(); d == UNKOWN {
 		t.Errorf("Expeceted direction to be initialized")
 	}
 
@@ -18,25 +18,25 @@ func TestWormMovability(t *testing.T) {
 	originalPos := w.position
 
 	w.MoveLeft()
-	if d := w.Direction(); d != "LEFT" {
+	if d := w.Direction(); d != LEFT {
 		t.Errorf("Unexpected direction", d)
 	}
 	testPos(Position{originalPos.X - 1, w.position.Y})
 
 	w.MoveRight()
-	if d := w.Direction(); d != "RIGHT" {
+	if d := w.Direction(); d != RIGHT {
 		t.Errorf("Unexpected direction", d)
 	}
 	testPos(Position{originalPos.X, w.position.Y})
 
 	w.MoveUp()
-	if d := w.Direction(); d != "UP" {
+	if d := w.Direction(); d != UP {
 		t.Errorf("Unexpected direction", d)
 	}
 	testPos(Position{originalPos.X, originalPos.Y - 1})
 
 	w.MoveDown()
-	if d := w.Direction(); d != "DOWN" {
+	if d := w.Direction(); d != DOWN {
 		t.Errorf("Unexpected direction", d)
 	}
 	testPos(Position{originalPos.X, originalPos.Y})
@@ -55,7 +55,7 @@ func TestCommunicate(t *testing.T) {
 	w.C.Inbox <- Packet{Command: "MOVE", Payload: "UP"}
 	<-done
 
-	if d := w.Direction(); d != "UP" {
+	if d := w.Direction(); d != UP {
 		t.Error("Did not obey communicated command, direction is:", d)
 	}
 
@@ -67,7 +67,7 @@ func TestCommunicate(t *testing.T) {
 	w.C.Inbox <- Packet{Command: "MOVE", Payload: "DOWN"}
 	<-done
 
-	if d := w.Direction(); d == "DOWN" {
+	if d := w.Direction(); d == DOWN {
 		t.Error("Should not be able to move in opposite direction")
 	}
 }
