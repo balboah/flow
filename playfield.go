@@ -43,11 +43,6 @@ type Playfield struct {
 	LastId    Id
 }
 
-type Transport struct {
-	Outbox chan Packet
-	Inbox  chan Packet
-}
-
 func NewPlayfield() *Playfield {
 	return &Playfield{
 		make(map[Movable]Id),
@@ -84,7 +79,6 @@ func (p *Playfield) Start() {
 				p.removeMovable(m)
 			case <-p.Ticker.C:
 				for m, id := range p.Movables {
-					m.Communicate()
 					switch m.Direction() {
 					case UP:
 						m.MoveUp()
@@ -96,6 +90,7 @@ func (p *Playfield) Start() {
 						m.MoveRight()
 					}
 					// TODO: Implement collition detection somewhere here
+					// TODO: Let the Worm websocket loop handle the actual sending to client
 					p.Broadcast <- Packet{
 						Command: "MOVE",
 						Payload: MovePayload{Id: id, Positions: m.(Attachable).Positions()}}
@@ -104,7 +99,7 @@ func (p *Playfield) Start() {
 				for m, id := range p.Movables {
 					c := m.Channel()
 					select {
-					case c.Outbox <- packet:
+					case c <- packet:
 					default:
 						log.Print("Could not send packet to movable:", id)
 					}

@@ -20,7 +20,6 @@ func WormsServer(ws *websocket.Conn) {
 
 	// TODO: Make this key dynamic once we want several playfields
 	playfield := lobby.Playfield("1337")
-
 	playfield.Join <- worm
 
 	quit := make(chan bool)
@@ -35,22 +34,23 @@ func WormsServer(ws *websocket.Conn) {
 				break
 			}
 			log.Print("Got data on worms server", message)
-			worm.C.Inbox <- message
+			if err := worm.Communicate(message); err != nil {
+				log.Println(err)
+				break
+			}
 		}
-		close(worm.C.Inbox)
-		quit <- true
 	}()
 
 	// Transmit to client
 	go func() {
-		for message := range worm.C.Outbox {
+		for message := range worm.Outbox {
 			err := websocket.JSON.Send(ws, message)
 			if err != nil {
 				log.Printf("Error sending position: %v", err)
 				break
 			}
 		}
-		quit <- true
+		close(quit)
 	}()
 
 	<-quit

@@ -46,27 +46,16 @@ func TestCommunicate(t *testing.T) {
 	w := NewWorm()
 	w.MoveRight()
 
-	done := make(chan int)
-	go func() {
-		w.Communicate()
-		done <- 1
-	}()
-
-	w.C.Inbox <- Packet{Command: "MOVE", Payload: "UP"}
-	<-done
-
+	if err := w.Communicate(Packet{Command: "MOVE", Payload: "UP"}); err != nil {
+		t.Error(err)
+	}
 	if d := w.Direction(); d != UP {
 		t.Error("Did not obey communicated command, direction is:", d)
 	}
 
-	go func() {
-		w.Communicate()
-		done <- 1
-	}()
-
-	w.C.Inbox <- Packet{Command: "MOVE", Payload: "DOWN"}
-	<-done
-
+	if err := w.Communicate(Packet{Command: "MOVE", Payload: "DOWN"}); err != nil {
+		t.Error(err)
+	}
 	if d := w.Direction(); d == DOWN {
 		t.Error("Should not be able to move in opposite direction")
 	}
