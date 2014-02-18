@@ -23,14 +23,13 @@ var lobby Lobby = Lobby{Playfields: make(map[string]*Playfield)}
 func (l Lobby) Playfield(key string) *Playfield {
 	l.mu.Lock()
 	p, ok := l.Playfields[key]
-	if ok == false {
+	if !ok {
 		p = NewPlayfield()
 		p.Start()
 		l.Playfields[key] = p
 		log.Printf("New playfield: %s", key)
 	}
 	l.mu.Unlock()
-
 	return p
 }
 
