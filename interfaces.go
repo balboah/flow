@@ -6,8 +6,8 @@ type Movable interface {
 	MoveUp() bool
 	MoveDown() bool
 	Direction() Direction
-	Channel() Transport
-	Communicate()
+	Channel() chan<- Packet
+	Communicate(Packet) error
 	Kill()
 }
 

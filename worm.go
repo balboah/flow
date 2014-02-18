@@ -1,7 +1,8 @@
 package flow
 
 import (
-	"log"
+	"errors"
+	"fmt"
 	"math/rand"
 )
 
@@ -81,16 +82,13 @@ func (b *Block) Follow(p Position) {
 type Worm struct {
 	Block
 	direction Direction
-	C         Transport
+	Outbox    chan Packet
 }
 
 func NewWorm() *Worm {
 	w := &Worm{
-		Block: Block{position: Position{25, 25}},
-		C: Transport{
-			Outbox: make(chan Packet, 5),
-			Inbox:  make(chan Packet, 1),
-		},
+		Block:  Block{position: Position{25, 25}},
+		Outbox: make(chan Packet, 5),
 	}
 	w.AddTail(TAIL)
 
@@ -98,57 +96,53 @@ func NewWorm() *Worm {
 }
 
 func (w *Worm) Kill() {
-	close(w.C.Outbox)
+	close(w.Outbox)
 }
 
 func (w *Worm) Position() Position {
 	return w.position
 }
 
-func (w *Worm) Channel() Transport {
-	return w.C
+func (w *Worm) Channel() chan<- Packet {
+	return w.Outbox
 }
 
 // Process incoming packets
-func (w *Worm) Communicate() {
-	select {
-	// Direction changes is the only thing we expect on the inbox right now
-	case message := <-w.C.Inbox:
-		switch message.Command {
-		case "MOVE":
-			payload, ok := message.Payload.(string)
-			if !ok {
-				log.Print("Got invalid payload for MOVE command")
-				break
-			}
-			switch payload {
-			case "UP":
-				if w.direction != DOWN {
-					w.direction = UP
-				}
-			case "DOWN":
-				if w.direction != UP {
-					w.direction = DOWN
-				}
-			case "LEFT":
-				if w.direction != RIGHT {
-					w.direction = LEFT
-				}
-			case "RIGHT":
-				if w.direction != LEFT {
-					w.direction = RIGHT
-				}
-			}
-		case "HELLO":
-		default:
-			log.Print("Unknown command:", message.Command)
+func (w *Worm) Communicate(message Packet) error {
+	// Direction changes is the only thing we expect right now
+	switch message.Command {
+	case "MOVE":
+		payload, ok := message.Payload.(string)
+		if !ok {
+			return errors.New("Got invalid payload for MOVE command")
 		}
+		switch payload {
+		case "UP":
+			if w.direction != DOWN {
+				w.direction = UP
+			}
+		case "DOWN":
+			if w.direction != UP {
+				w.direction = DOWN
+			}
+		case "LEFT":
+			if w.direction != RIGHT {
+				w.direction = LEFT
+			}
+		case "RIGHT":
+			if w.direction != LEFT {
+				w.direction = RIGHT
+			}
+		}
+		// TODO: Refactor how the tail gets updated
+		if tail := w.Next(); tail != nil {
+			tail.Follow(w.position)
+		}
+	case "HELLO":
 	default:
+		return errors.New(fmt.Sprintf("Unknown command: %s", message.Command))
 	}
-
-	if tail := w.Next(); tail != nil {
-		tail.Follow(w.position)
-	}
+	return nil
 }
 
 // Get the direction we are currently going in or set one if empty
