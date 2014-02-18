@@ -85,8 +85,13 @@ type Worm struct {
 }
 
 func NewWorm() *Worm {
-	t := Transport{Outbox: make(chan Packet, 5), Inbox: make(chan Packet, 1)}
-	w := &Worm{Block: Block{position: Position{25, 25}}, C: t}
+	w := &Worm{
+		Block: Block{position: Position{25, 25}},
+		C: Transport{
+			Outbox: make(chan Packet, 5),
+			Inbox:  make(chan Packet, 1),
+		},
+	}
 	w.AddTail(TAIL)
 
 	return w
