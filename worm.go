@@ -133,10 +133,6 @@ func (w *Worm) Communicate(message Packet) error {
 				w.direction = Right
 			}
 		}
-		// TODO: Refactor how the tail gets updated
-		if tail := w.Next(); tail != nil {
-			tail.Follow(w.position)
-		}
 	case "HELLO":
 	default:
 		return errors.New(fmt.Sprintf("Unknown command: %s", message.Command))
@@ -159,40 +155,32 @@ func (w *Worm) Direction() Direction {
 	return w.direction
 }
 
-func (w *Worm) MoveLeft() bool {
-	if w.position.X > 0 {
-		w.position.X--
-		w.direction = Left
-		return true
+func (w *Worm) Move(d Direction) {
+	// Make our tail tag along
+	if tail := w.Next(); tail != nil {
+		tail.Follow(w.position)
 	}
-	return false
-}
 
-func (w *Worm) MoveUp() bool {
-	if w.position.Y > 0 {
-		w.position.Y--
-		w.direction = Up
-		return true
+	// Then update our new position
+	w.direction = d
+	switch d {
+	case Left:
+		if w.position.X > 0 {
+			w.position.X--
+		}
+	case Up:
+		if w.position.Y > 0 {
+			w.position.Y--
+		}
+	case Right:
+		if w.position.X < Boundary {
+			w.position.X++
+		}
+	case Down:
+		if w.position.Y < Boundary {
+			w.position.Y++
+		}
 	}
-	return false
-}
-
-func (w *Worm) MoveRight() bool {
-	if w.position.X < Boundary {
-		w.position.X++
-		w.direction = Right
-		return true
-	}
-	return false
-}
-
-func (w *Worm) MoveDown() bool {
-	if w.position.Y < Boundary {
-		w.position.Y++
-		w.direction = Down
-		return true
-	}
-	return false
 }
 
 // Create a chain of Blocks to form the tail of the worm

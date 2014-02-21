@@ -79,16 +79,7 @@ func (p *Playfield) Start() {
 				p.removeMovable(m)
 			case <-p.Ticker.C:
 				for m, id := range p.Movables {
-					switch m.Direction() {
-					case Up:
-						m.MoveUp()
-					case Down:
-						m.MoveDown()
-					case Left:
-						m.MoveLeft()
-					case Right:
-						m.MoveRight()
-					}
+					m.Move(m.Direction())
 					// TODO: Implement collition detection somewhere here
 					// TODO: Let the Worm websocket loop handle the actual sending to client
 					p.Broadcast <- Packet{

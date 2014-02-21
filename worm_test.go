@@ -17,25 +17,25 @@ func TestWormMovability(t *testing.T) {
 
 	originalPos := w.position
 
-	w.MoveLeft()
+	w.Move(Left)
 	if d := w.Direction(); d != Left {
 		t.Errorf("Unexpected direction", d)
 	}
 	testPos(Position{originalPos.X - 1, w.position.Y})
 
-	w.MoveRight()
+	w.Move(Right)
 	if d := w.Direction(); d != Right {
 		t.Errorf("Unexpected direction", d)
 	}
 	testPos(Position{originalPos.X, w.position.Y})
 
-	w.MoveUp()
+	w.Move(Up)
 	if d := w.Direction(); d != Up {
 		t.Errorf("Unexpected direction", d)
 	}
 	testPos(Position{originalPos.X, originalPos.Y - 1})
 
-	w.MoveDown()
+	w.Move(Down)
 	if d := w.Direction(); d != Down {
 		t.Errorf("Unexpected direction", d)
 	}
@@ -44,7 +44,7 @@ func TestWormMovability(t *testing.T) {
 
 func TestCommunicate(t *testing.T) {
 	w := NewWorm()
-	w.MoveRight()
+	w.Move(Right)
 
 	if err := w.Communicate(Packet{Command: "MOVE", Payload: "UP"}); err != nil {
 		t.Error(err)
