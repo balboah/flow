@@ -3,7 +3,6 @@ package flow
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 )
 
 const (
@@ -148,16 +147,14 @@ func (w *Worm) Communicate(message Packet) error {
 // Get the direction we are currently going in or set one if empty
 func (w *Worm) Direction() Direction {
 	if w.direction == UNKOWN {
-		switch rand.Intn(4) {
-		case 0:
-			w.direction = RIGHT
-		case 1:
-			w.direction = LEFT
-		case 2:
-			w.direction = DOWN
-		case 3:
-			w.direction = UP
+		choice := make(chan Direction, 1)
+		select {
+		case choice <- RIGHT:
+		case choice <- LEFT:
+		case choice <- DOWN:
+		case choice <- UP:
 		}
+		w.direction = <-choice
 	}
 	return w.direction
 }
