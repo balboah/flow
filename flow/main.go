@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/balboah/flow"
 	"log"
-	"math/rand"
 	"net/http"
-	"time"
 )
 
 var (
@@ -18,7 +16,6 @@ var (
 func main() {
 	flag.Parse()
 
-	rand.Seed(time.Now().UTC().UnixNano())
 	log.Printf("Starting flow server at %v\n", fmt.Sprintf(":%v", *port))
 	http.Handle("/worms", flow.WormsHandler())
 	http.Handle("/", http.FileServer(http.Dir(*root)))
