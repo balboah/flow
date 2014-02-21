@@ -65,19 +65,19 @@ func TestWormsServerConnect(t *testing.T) {
 		t.Errorf("Write: %v", err)
 	}
 
-	var actual_msg Packet
+	var actualMsg Packet
 
 	timer := time.AfterFunc(Tick*2*time.Millisecond, func() {
 		t.Errorf("Timed out waiting for a reply")
 	})
-	if err := websocket.JSON.Receive(conn, &actual_msg); err != nil {
+	if err := websocket.JSON.Receive(conn, &actualMsg); err != nil {
 		t.Errorf("Read: %v", err)
 	}
 	timer.Stop()
 
-	switch actual_msg.Command {
+	switch actualMsg.Command {
 	case "MOVE", "KILL", "HELLO":
 	default:
-		t.Errorf("Unexpected reply", actual_msg)
+		t.Errorf("Unexpected reply", actualMsg)
 	}
 }
