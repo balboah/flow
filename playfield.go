@@ -45,12 +45,13 @@ type Playfield struct {
 
 func NewPlayfield() *Playfield {
 	return &Playfield{
-		make(map[Movable]Id),
-		time.NewTicker(Tick * time.Millisecond),
-		make(chan Movable),
-		make(chan Movable),
-		make(chan Packet, 1024),
-		0}
+		Movables:  make(map[Movable]Id),
+		Ticker:    time.NewTicker(Tick * time.Millisecond),
+		Join:      make(chan Movable),
+		Part:      make(chan Movable),
+		Broadcast: make(chan Packet, 1024),
+		LastId:    0,
+	}
 }
 
 func (p *Playfield) addMovable(m Movable) {
