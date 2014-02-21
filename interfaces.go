@@ -1,10 +1,7 @@
 package flow
 
 type Movable interface {
-	MoveLeft() bool
-	MoveRight() bool
-	MoveUp() bool
-	MoveDown() bool
+	Move(Direction)
 	Direction() Direction
 	Channel() chan<- Packet
 	Communicate(Packet) error
