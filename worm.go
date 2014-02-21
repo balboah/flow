@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	BOUNDARY = 49 // The outer boundary of a playfield
-	TAIL     = 10 // Starting length of the worm tail
+	Boundary = 49 // The outer boundary of a playfield
+	Tail     = 10 // Starting length of the worm tail
 )
 
 type Length uint
@@ -15,22 +15,22 @@ type Length uint
 type Direction uint
 
 const (
-	UNKOWN Direction = iota
-	UP
-	DOWN
-	LEFT
-	RIGHT
+	Unknown Direction = iota
+	Up
+	Down
+	Left
+	Right
 )
 
 func (d Direction) String() string {
 	switch d {
-	case UP:
+	case Up:
 		return "UP"
-	case DOWN:
+	case Down:
 		return "DOWN"
-	case LEFT:
+	case Left:
 		return "LEFT"
-	case RIGHT:
+	case Right:
 		return "RIGHT"
 	}
 	return ""
@@ -89,7 +89,7 @@ func NewWorm() *Worm {
 		Block:  Block{position: Position{25, 25}},
 		Outbox: make(chan Packet, 5),
 	}
-	w.AddTail(TAIL)
+	w.AddTail(Tail)
 
 	return w
 }
@@ -117,20 +117,20 @@ func (w *Worm) Communicate(message Packet) error {
 		}
 		switch payload {
 		case "UP":
-			if w.direction != DOWN {
-				w.direction = UP
+			if w.direction != Down {
+				w.direction = Up
 			}
 		case "DOWN":
-			if w.direction != UP {
-				w.direction = DOWN
+			if w.direction != Up {
+				w.direction = Down
 			}
 		case "LEFT":
-			if w.direction != RIGHT {
-				w.direction = LEFT
+			if w.direction != Right {
+				w.direction = Left
 			}
 		case "RIGHT":
-			if w.direction != LEFT {
-				w.direction = RIGHT
+			if w.direction != Left {
+				w.direction = Right
 			}
 		}
 		// TODO: Refactor how the tail gets updated
@@ -146,13 +146,13 @@ func (w *Worm) Communicate(message Packet) error {
 
 // Get the direction we are currently going in or set one if empty
 func (w *Worm) Direction() Direction {
-	if w.direction == UNKOWN {
+	if w.direction == Unknown {
 		choice := make(chan Direction, 1)
 		select {
-		case choice <- RIGHT:
-		case choice <- LEFT:
-		case choice <- DOWN:
-		case choice <- UP:
+		case choice <- Right:
+		case choice <- Left:
+		case choice <- Down:
+		case choice <- Up:
 		}
 		w.direction = <-choice
 	}
@@ -162,7 +162,7 @@ func (w *Worm) Direction() Direction {
 func (w *Worm) MoveLeft() bool {
 	if w.position.X > 0 {
 		w.position.X--
-		w.direction = LEFT
+		w.direction = Left
 		return true
 	}
 	return false
@@ -171,25 +171,25 @@ func (w *Worm) MoveLeft() bool {
 func (w *Worm) MoveUp() bool {
 	if w.position.Y > 0 {
 		w.position.Y--
-		w.direction = UP
+		w.direction = Up
 		return true
 	}
 	return false
 }
 
 func (w *Worm) MoveRight() bool {
-	if w.position.X < BOUNDARY {
+	if w.position.X < Boundary {
 		w.position.X++
-		w.direction = RIGHT
+		w.direction = Right
 		return true
 	}
 	return false
 }
 
 func (w *Worm) MoveDown() bool {
-	if w.position.Y < BOUNDARY {
+	if w.position.Y < Boundary {
 		w.position.Y++
-		w.direction = DOWN
+		w.direction = Down
 		return true
 	}
 	return false
