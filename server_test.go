@@ -40,7 +40,7 @@ func TestConcurrency(t *testing.T) {
 	for n := 0; n < times; n++ {
 		select {
 		case <-done:
-		case <-time.After(TICK * 2 * time.Millisecond):
+		case <-time.After(Tick * 2 * time.Millisecond):
 			t.Errorf("Timed out waiting for a reply")
 			return
 		}
@@ -67,7 +67,7 @@ func TestWormsServerConnect(t *testing.T) {
 
 	var actual_msg Packet
 
-	timer := time.AfterFunc(TICK*2*time.Millisecond, func() {
+	timer := time.AfterFunc(Tick*2*time.Millisecond, func() {
 		t.Errorf("Timed out waiting for a reply")
 	})
 	if err := websocket.JSON.Receive(conn, &actual_msg); err != nil {

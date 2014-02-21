@@ -8,7 +8,7 @@ import (
 )
 
 // How fast playfields switch packets to clients
-const TICK = 200
+const Tick = 200
 
 type Id uint
 
@@ -46,7 +46,7 @@ type Playfield struct {
 func NewPlayfield() *Playfield {
 	return &Playfield{
 		make(map[Movable]Id),
-		time.NewTicker(TICK * time.Millisecond),
+		time.NewTicker(Tick * time.Millisecond),
 		make(chan Movable),
 		make(chan Movable),
 		make(chan Packet, 1024),
@@ -80,13 +80,13 @@ func (p *Playfield) Start() {
 			case <-p.Ticker.C:
 				for m, id := range p.Movables {
 					switch m.Direction() {
-					case UP:
+					case Up:
 						m.MoveUp()
-					case DOWN:
+					case Down:
 						m.MoveDown()
-					case LEFT:
+					case Left:
 						m.MoveLeft()
-					case RIGHT:
+					case Right:
 						m.MoveRight()
 					}
 					// TODO: Implement collition detection somewhere here
