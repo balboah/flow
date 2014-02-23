@@ -85,7 +85,7 @@ func (p *Playfield) Start() {
 					// TODO: Let the Worm websocket loop handle the actual sending to client
 					p.Broadcast <- Packet{
 						Command: "MOVE",
-						Payload: MovePayload{Id: id, Positions: m.(Attachable).Positions()}}
+						Payload: MovePayload{Id: id, Positions: m.Positions()}}
 				}
 			case packet := <-p.Broadcast:
 				for m, id := range p.Movables {
