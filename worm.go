@@ -7,7 +7,7 @@ import (
 
 const (
 	Boundary = 49 // The outer boundary of a playfield
-	Tail     = 10 // Starting length of the worm tail
+	WormSize = 10 // Starting length of the worm
 )
 
 type Length uint
@@ -36,62 +36,32 @@ func (d Direction) String() string {
 	return ""
 }
 
-// A "pixel" block on the playfield
-// Attackable to other blocks forming a chain
-type Block struct {
-	attached Attachable
-	position Position
-}
-
-// Get next block in chain
-func (b *Block) Next() Attachable {
-	return b.attached
-}
-
-// Attach next block
-func (b *Block) Attach(a Attachable) {
-	if b.attached != nil {
-		b.attached.Attach(a)
-	} else {
-		b.attached = a
-	}
-}
-
-// Get positions of all blocks in the chain
-func (b *Block) Positions() []Position {
-	if b.attached != nil {
-		nextPos := b.attached.Positions()
-		pos := make([]Position, 1, len(nextPos)+1)
-		pos[0] = b.position
-		return append(pos, nextPos...)
-	}
-	return []Position{b.position}
-}
-
-// Update the position of this and subsequent blocks
-func (b *Block) Follow(p Position) {
-	next := b.Next()
-	if next != nil {
-		next.Follow(b.position)
-	}
-	b.position = p
-}
-
 // The player controlled worm
 type Worm struct {
-	Block
+	// The positions of the points that makes up the worm
+	blocks []Position
+
+	// Which direction are we going at
 	direction Direction
-	Outbox    chan Packet
+
+	// Packets to be sent to the client controlling the worm
+	Outbox chan Packet
 }
 
 func NewWorm() *Worm {
-	w := &Worm{
-		Block:  Block{position: Position{25, 25}},
-		Outbox: make(chan Packet, 5),
+	blocks := make([]Position, WormSize)
+	for n := 0; n < cap(blocks); n++ {
+		blocks[n] = Position{25, 25}
 	}
-	w.AddTail(Tail)
+	return &Worm{
+		blocks:    blocks,
+		direction: Unknown,
+		Outbox:    make(chan Packet, 5),
+	}
+}
 
-	return w
+func (w *Worm) Positions() []Position {
+	return w.blocks
 }
 
 func (w *Worm) Kill() {
@@ -99,7 +69,7 @@ func (w *Worm) Kill() {
 }
 
 func (w *Worm) Position() Position {
-	return w.position
+	return w.blocks[0]
 }
 
 func (w *Worm) Channel() chan<- Packet {
@@ -156,38 +126,27 @@ func (w *Worm) Direction() Direction {
 }
 
 func (w *Worm) Move(d Direction) {
-	// Make our tail tag along
-	if tail := w.Next(); tail != nil {
-		tail.Follow(w.position)
-	}
-
 	// Then update our new position
 	w.direction = d
+	pos := w.blocks[0]
 	switch d {
 	case Left:
-		if w.position.X > 0 {
-			w.position.X--
+		if pos.X > 0 {
+			pos.X--
 		}
 	case Up:
-		if w.position.Y > 0 {
-			w.position.Y--
+		if pos.Y > 0 {
+			pos.Y--
 		}
 	case Right:
-		if w.position.X < Boundary {
-			w.position.X++
+		if pos.X < Boundary {
+			pos.X++
 		}
 	case Down:
-		if w.position.Y < Boundary {
-			w.position.Y++
+		if pos.Y < Boundary {
+			pos.Y++
 		}
 	}
-}
-
-// Create a chain of Blocks to form the tail of the worm
-func (w *Worm) AddTail(l Length) (total Length) {
-	for n := 0; n < int(l); n++ {
-		w.Attach(&Block{position: w.position})
-	}
-
-	return Length(len(w.Next().Positions()))
+	// Push all blocks to follow the preceding, moving the tail of the worm
+	w.blocks = append([]Position{pos}, w.blocks[0:len(w.blocks)-1]...)
 }
