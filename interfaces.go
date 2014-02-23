@@ -5,6 +5,10 @@ type Movable interface {
 	Direction() Direction
 	Channel() chan<- Packet
 	Communicate(Packet) error
-	Kill()
 	Positions() []Position
+}
+
+type Killable interface {
+	Kill()
+	Killed() bool
 }

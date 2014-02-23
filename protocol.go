@@ -22,3 +22,8 @@ type MovePayload struct {
 	Id        Id
 	Positions []Position
 }
+
+type BulkPayload struct {
+	Move []MovePayload
+	Kill []string
+}

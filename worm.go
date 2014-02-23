@@ -44,6 +44,9 @@ type Worm struct {
 	// Which direction are we going at
 	direction Direction
 
+	// Wether this worm is currently alive
+	killed bool
+
 	// Packets to be sent to the client controlling the worm
 	Outbox chan Packet
 }
@@ -57,6 +60,7 @@ func NewWorm() *Worm {
 		blocks:    blocks,
 		direction: Unknown,
 		Outbox:    make(chan Packet, 5),
+		killed:    false,
 	}
 }
 
@@ -65,7 +69,12 @@ func (w *Worm) Positions() []Position {
 }
 
 func (w *Worm) Kill() {
+	w.killed = true
 	close(w.Outbox)
+}
+
+func (w *Worm) Killed() bool {
+	return w.killed
 }
 
 func (w *Worm) Position() Position {

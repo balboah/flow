@@ -63,9 +63,6 @@ func (p *Playfield) addMovable(m Movable) {
 
 func (p *Playfield) removeMovable(m Movable) {
 	log.Print("Deleting movable", m)
-	m.Kill()
-
-	p.Broadcast <- Packet{"KILL", fmt.Sprintf("%d", p.Movables[m])}
 	delete(p.Movables, m)
 }
 
@@ -77,15 +74,35 @@ func (p *Playfield) Start() {
 			case m := <-p.Join:
 				p.addMovable(m)
 			case m := <-p.Part:
-				p.removeMovable(m)
+				if k, killable := m.(Killable); killable {
+					k.Kill()
+				} else {
+					p.removeMovable(m)
+				}
 			case <-p.Ticker.C:
+				bulkMove := make([]MovePayload, 0, len(p.Movables))
+				bulkKill := make([]string, 0, len(p.Movables))
 				for m, id := range p.Movables {
+					if k, killable := m.(Killable); killable {
+						if k.Killed() {
+							p.removeMovable(m)
+							bulkKill = append(bulkKill, fmt.Sprintf("%d", p.Movables[m]))
+							continue
+						}
+					}
 					m.Move(m.Direction())
 					// TODO: Implement collition detection somewhere here
-					// TODO: Let the Worm websocket loop handle the actual sending to client
-					p.Broadcast <- Packet{
-						Command: "MOVE",
-						Payload: MovePayload{Id: id, Positions: m.Positions()}}
+					bulkMove = append(
+						bulkMove,
+						MovePayload{Id: id, Positions: m.Positions()},
+					)
+				}
+				p.Broadcast <- Packet{
+					Command: "BULK",
+					Payload: BulkPayload{
+						Move: bulkMove,
+						Kill: bulkKill,
+					},
 				}
 			case packet := <-p.Broadcast:
 				for m, id := range p.Movables {
