@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-func TestAddRemoveMovable(t *testing.T) {
+func TestAddRemoveMover(t *testing.T) {
 	playfield := NewPlayfield()
 	playfield.Start()
-	m := Movable(NewWorm())
-	m2 := Movable(NewWorm())
+	m := Mover(NewWorm())
+	m2 := Mover(NewWorm())
 	playfield.Join <- m
 	playfield.Join <- m2
 	playfield.Part <- m
@@ -19,8 +19,8 @@ func TestAddRemoveMovable(t *testing.T) {
 	for n := 1; n <= 2; n++ {
 		select {
 		case packet := <-playfield.Broadcast:
-			if packet.Command != "KILL" {
-				t.Errorf("Expected KILL packet")
+			if packet.Command != "BULK" {
+				t.Errorf("Expected BULK packet")
 			} else if packet.Payload.(string) != fmt.Sprintf("%d", n) {
 				t.Errorf("Expected payload to be id %d of worm, got: %v", n, packet.Payload)
 			}
@@ -29,7 +29,7 @@ func TestAddRemoveMovable(t *testing.T) {
 			t.Errorf("Timed out waiting for a KILL packet")
 		}
 	}
-	if len(playfield.Movables) != 0 {
+	if len(playfield.Movers) != 0 {
 		t.Error("Expected movables to be empty")
 	}
 }

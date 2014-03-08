@@ -1,11 +1,23 @@
 package flow
 
-type Movable interface {
+type Mover interface {
 	Move(Direction)
 	Direction() Direction
-	Channel() chan<- Packet
+	Communicator
+	Positioner
+	Channeler
+}
+
+type Communicator interface {
 	Communicate(Packet) error
+}
+
+type Positioner interface {
 	Positions() []Position
+}
+
+type Channeler interface {
+	Channel() chan<- Packet
 }
 
 type Killable interface {

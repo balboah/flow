@@ -70,15 +70,10 @@ func (w *Worm) Positions() []Position {
 
 func (w *Worm) Kill() {
 	w.killed = true
-	close(w.Outbox)
 }
 
 func (w *Worm) Killed() bool {
 	return w.killed
-}
-
-func (w *Worm) Position() Position {
-	return w.blocks[0]
 }
 
 func (w *Worm) Channel() chan<- Packet {
