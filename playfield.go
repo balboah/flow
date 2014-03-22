@@ -24,8 +24,7 @@ func (l Lobby) Playfield(key string) *Playfield {
 	l.mu.Lock()
 	p, ok := l.Playfields[key]
 	if !ok {
-		p = NewPlayfield()
-		p.Start()
+		p = NewPlayfield(nil)
 		l.Playfields[key] = p
 		log.Printf("New playfield: %s", key)
 	}
@@ -33,73 +32,82 @@ func (l Lobby) Playfield(key string) *Playfield {
 	return p
 }
 
-// Broadcast messages to registered channels
-type Broadcast struct {
-	Inbox  chan Packet
-	outbox []chan<- Packet
-	mu     sync.RWMutex
+// Ticker keeps track of time
+type Ticker interface {
+	// The channel on which ticks are delivered
+	TickC() <-chan time.Time
+	// Tick delivers a tick
+	Tick()
+	// Stop ticking
+	Stop()
 }
 
-func NewBroadcast() *Broadcast {
-	b := &Broadcast{
-		Inbox:  make(chan Packet, 1024),
-		outbox: make([]chan<- Packet, 0, 2),
+// DefaultTicker waps a time.Ticker to implement the Ticker interface
+type DefaultTicker struct {
+	t *time.Ticker
+	c chan time.Time
+}
+
+func NewDefaltTicker(t *time.Ticker) *DefaultTicker {
+	d := DefaultTicker{t, make(chan time.Time)}
+	if t != nil {
+		go func() {
+			for tick := range t.C {
+				d.c <- tick
+			}
+		}()
 	}
-	go func() {
-		for p := range b.Inbox {
-			b.send(p)
-		}
-	}()
-	return b
+
+	return &d
 }
 
-func (b *Broadcast) Add(c chan<- Packet) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.outbox = append(b.outbox, c)
+func (d DefaultTicker) TickC() <-chan time.Time {
+	return d.c
 }
 
-func (b *Broadcast) Del(c chan<- Packet) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i, outboxc := range b.outbox {
-		if c == outboxc {
-			b.outbox = append(b.outbox[:i], b.outbox[i+1:]...)
-		}
+func (d DefaultTicker) Tick() {
+	d.c <- time.Now()
+}
+
+func (d DefaultTicker) Stop() {
+	if d.t != nil {
+		d.t.Stop()
 	}
-}
-
-func (b Broadcast) send(message Packet) {
-	b.mu.RLock()
-	defer b.mu.Unlock()
-	for i, c := range b.outbox {
-		select {
-		case c <- message:
-		default:
-			log.Print("Could not send packet to channel number", i)
-		}
-	}
+	close(d.c)
 }
 
 // A playfield is responsible of communicating between clients
 type Playfield struct {
-	Movers      map[Mover]Id
-	Ticker      *time.Ticker
-	Join        chan Mover
-	Part        chan Mover
+	Movers map[Mover]Id
+	LastId Id
+	// Ticker triggers playfield updates
+	ticker Ticker
+	// Populates list of movers
+	Join chan Mover
+	// Removes frmo list of movers
+	Part chan Mover
+	// Returns value through run() goroutine, can be used for synchronizing
+	// or to make sure the playfield is still running.
+	Running chan bool
+	// Used to broadcast to all movables
 	Broadcaster *Broadcast
-	LastId      Id
 }
 
-func NewPlayfield() *Playfield {
-	return &Playfield{
+func NewPlayfield(speed Ticker) *Playfield {
+	if speed == nil {
+		speed = NewDefaltTicker(time.NewTicker(Tick * time.Millisecond))
+	}
+	p := &Playfield{
 		Movers:      make(map[Mover]Id),
-		Ticker:      time.NewTicker(Tick * time.Millisecond),
+		ticker:      speed,
 		Join:        make(chan Mover),
 		Part:        make(chan Mover),
+		Running:     make(chan bool),
 		Broadcaster: NewBroadcast(),
 		LastId:      0,
 	}
+	go p.run()
+	return p
 }
 
 func (p *Playfield) addMover(m Mover) {
@@ -118,51 +126,53 @@ func (p *Playfield) removeMover(m Mover) {
 	if c, ok := m.(Channeler); ok {
 		p.Broadcaster.Del(c.Channel())
 	}
-	if k, ok := m.(Killable); ok && !k.Killed() {
-		k.Kill()
-	}
 	delete(p.Movers, m)
 }
 
-func (p *Playfield) Start() {
-	log.Println("Playfield starting")
-	go func() {
-		for {
-			select {
-			case m := <-p.Join:
-				p.addMover(m)
-			case m := <-p.Part:
+func (p *Playfield) run() {
+	log.Println("Playfield starting", &p)
+	for {
+		select {
+		case p.Running <- true:
+		case m := <-p.Join:
+			p.addMover(m)
+		case m := <-p.Part:
+			// Killables has to be broadcasted on next iteration
+			if k, ok := m.(Killable); ok && !k.Killed() {
+				k.Kill()
+			} else {
 				p.removeMover(m)
-			case <-p.Ticker.C:
-				bulkMove := make([]MovePayload, 0, len(p.Movers))
-				bulkKill := make([]string, 0, len(p.Movers))
-				for m, id := range p.Movers {
-					if k, killable := m.(Killable); killable {
-						if k.Killed() {
-							p.removeMover(m)
-							bulkKill = append(bulkKill, fmt.Sprintf("%d", p.Movers[m]))
-							continue
-						}
+			}
+		case <-p.ticker.TickC():
+			bulkMove := make([]MovePayload, 0, len(p.Movers))
+			bulkKill := make([]string, 0, len(p.Movers))
+			for m, id := range p.Movers {
+				if k, killable := m.(Killable); killable {
+					if k.Killed() {
+						p.removeMover(m)
+						bulkKill = append(bulkKill, fmt.Sprintf("%d", p.Movers[m]))
+						continue
 					}
-					m.Move(m.Direction())
-					// TODO: Implement collition detection somewhere here
-					bulkMove = append(
-						bulkMove,
-						MovePayload{Id: id, Positions: m.Positions()},
-					)
 				}
-				p.Broadcaster.Inbox <- Packet{
-					Command: "BULK",
-					Payload: BulkPayload{
-						Move: bulkMove,
-						Kill: bulkKill,
-					},
-				}
+				m.Move(m.Direction())
+				// TODO: Implement collition detection somewhere here
+				bulkMove = append(
+					bulkMove,
+					MovePayload{Id: id, Positions: m.Positions()},
+				)
+			}
+
+			p.Broadcaster.Inbox <- Packet{
+				Command: "BULK",
+				Payload: BulkPayload{
+					Move: bulkMove,
+					Kill: bulkKill,
+				},
 			}
 		}
-	}()
+	}
 }
 
 func (p *Playfield) Stop() {
-	p.Ticker.Stop()
+	p.ticker.Stop()
 }

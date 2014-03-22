@@ -24,6 +24,6 @@ type MovePayload struct {
 }
 
 type BulkPayload struct {
-	Move []MovePayload
-	Kill []string
+	Move []MovePayload `json:",omitempty"`
+	Kill []string      `json:",omitempty"`
 }
