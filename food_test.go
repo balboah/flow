@@ -115,7 +115,7 @@ func TestCollisionEatsFoodAndScores(t *testing.T) {
 	target := Food{Id: p.LastFoodId, Position: w.Head(), Type: Apple}
 	p.Foods[target.Id] = &target
 
-	p.resolveCollisions()
+	p.resolveFoodCollisions()
 
 	if w.Score != PointsPerFood[Apple] {
 		t.Errorf("Expected score %d, got %d", PointsPerFood[Apple], w.Score)

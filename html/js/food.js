@@ -1,9 +1,32 @@
 (function(){
 
-	var FOOD_COLORS = {
-		apple:  '#e53935',
-		carrot: '#fb8c00'
+	var FOOD_EMOJI = {
+		apple:  '🍎',  // 🍎
+		carrot: '🥕'   // 🥕
 	};
+
+	// Pre-render each emoji into an offscreen canvas. Many KineticJS 5.x setups
+	// don't draw Kinetic.Text glyphs reliably in this build, so we paint the
+	// glyph ourselves via fillText and reuse the result as an Image.
+	var bitmapCache = {};
+	function bitmapFor(emoji, size) {
+		var key = emoji + '@' + size;
+		if (bitmapCache[key]) {
+			return bitmapCache[key];
+		}
+		var c = document.createElement('canvas');
+		c.width = size;
+		c.height = size;
+		var ctx = c.getContext('2d');
+		ctx.clearRect(0, 0, size, size);
+		ctx.font = (size - 2) + 'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla","EmojiOne Color",sans-serif';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = '#000';
+		ctx.fillText(emoji, size / 2, size / 2);
+		bitmapCache[key] = c;
+		return c;
+	}
 
 	function Food(payload, field) {
 		this.id = payload.Id;
@@ -14,13 +37,15 @@
 		this.field = field;
 
 		var grid = field.options.grid;
-		this.shape = new Kinetic.Circle({
-			x: this.x * grid + grid / 2,
-			y: this.y * grid + grid / 2,
-			radius: grid / 2 - 2,
-			fill: FOOD_COLORS[this.type] || '#aaa',
-			stroke: '#222',
-			strokeWidth: 1
+		var glyph = FOOD_EMOJI[this.type] || '?';
+		var bitmap = bitmapFor(glyph, grid);
+
+		this.shape = new Kinetic.Image({
+			x: this.x * grid,
+			y: this.y * grid,
+			width: grid,
+			height: grid,
+			image: bitmap
 		});
 
 		field.foodLayer.add(this.shape);

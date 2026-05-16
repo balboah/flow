@@ -23,9 +23,18 @@ type MovePayload struct {
 	Positions []Position
 }
 
+type HelloPayload struct {
+	Name  string
+	Token string
+}
+
 type WelcomePayload struct {
-	Id   Id
-	Name string
+	Id          Id
+	Name        string
+	Token       string
+	Dead        bool   // worm is currently in a GAMEOVER state
+	DeathReason string // populated when Dead is true
+	Score       int    // current score, included so the dialog can show it
 }
 
 type FoodPayload struct {
@@ -45,4 +54,9 @@ type ScorePayload struct {
 	WormId Id
 	Name   string
 	Score  int
+}
+
+type GameOverPayload struct {
+	WormId Id
+	Reason string
 }

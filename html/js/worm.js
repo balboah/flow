@@ -35,7 +35,15 @@
 
 		this.layer.moveToTop();
 
-		this.type = 1 + (id % 3);
+		// The current player's worm always renders as the rainbow atlas so the
+		// player can spot themselves at a glance. Other worms cycle through
+		// blue / gray, deterministic per id so they don't shuffle on reload.
+		var otherAtlases = [2, 1];
+		if (window.game && game.hud && id === game.hud.ownId) {
+			this.type = 3;
+		} else {
+			this.type = otherAtlases[(id - 1) % otherAtlases.length];
+		}
 
 		this.image = new Image();
 		this.image.src = '/img/worm-' + this.type + '.png';
@@ -71,6 +79,7 @@
 	};
 
 	Worm.prototype.move = function(positions) {
+		this.lastPositions = positions;
 		var grid = this.flow.options.grid,
 			i = 0,
 			l = positions.length - 1,

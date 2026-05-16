@@ -15,6 +15,26 @@
 
 	<div id="playfield"></div>
 
+	<div id="gameover" hidden>
+		<div class="panel">
+			<h1>Game Over</h1>
+			<p class="reason" id="gameover-reason"></p>
+			<p class="final-score">Score: <b id="gameover-score">0</b></p>
+			<button id="gameover-restart" type="button">New Game</button>
+		</div>
+	</div>
+
+	<div id="welcome" hidden>
+		<div class="panel">
+			<h1>Flow</h1>
+			<p>A multiplayer snake game. Pick an alias to start.</p>
+			<form id="welcome-form">
+				<input id="welcome-name" type="text" maxlength="20" placeholder="Your name" autofocus>
+				<button type="submit">Start</button>
+			</form>
+		</div>
+	</div>
+
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/kineticjs/5.2.0/kinetic.min.js"></script>
 
@@ -22,6 +42,7 @@
 	<script src="js/food.js"></script>
 	<script src="js/field.js"></script>
 	<script src="js/hud.js"></script>
+	<script src="js/sounds.js"></script>
 	<script src="js/game.js"></script>
 	<script>game.init()</script>
 
