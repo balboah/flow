@@ -146,11 +146,32 @@ func (p *Playfield) occupied() map[Position]struct{} {
 	return out
 }
 
+// MaxActiveBombs caps how many bombs may exist on the field at once. Without
+// this, repeated rolls of `Bomb` would gradually replace every fruit until
+// the player has nothing edible to chase.
+const MaxActiveBombs = 2
+
 // spawnFood adds a new food item to the field. Returns the spawned food
 // so callers can broadcast it (or send privately on initial state delivery).
+// If the random roll would push the bomb count past MaxActiveBombs, the
+// spawn is forced to a fruit instead so the field always has something
+// rewarding to eat.
 func (p *Playfield) spawnFood() Food {
 	p.LastFoodId++
+	bombs := 0
+	for _, f := range p.Foods {
+		if f.Type == Bomb {
+			bombs++
+		}
+	}
 	f := randomFood(p.LastFoodId, p.occupied())
+	if f.Type == Bomb && bombs >= MaxActiveBombs {
+		if rand.IntN(2) == 0 {
+			f.Type = Apple
+		} else {
+			f.Type = Carrot
+		}
+	}
 	p.Foods[f.Id] = &f
 	return f
 }
