@@ -27,7 +27,7 @@
 	var MARKER_THROTTLE_MS = 50;
 
 	function Field(options) {
-		this.options = $.extend({}, Field.defaults, options || {});
+		this.options = Object.assign({}, Field.defaults, options || {});
 		this.worms = {};
 		this.foods = {};
 		this.particles = [];
@@ -62,7 +62,8 @@
 
 		var self = this;
 		this.fit();
-		$(window).on('resize.flow-field', function(){ self.fit(); });
+		this._resizeHandler = function(){ self.fit(); };
+		window.addEventListener('resize', this._resizeHandler);
 
 		// One full repaint at boot so the empty stage shows the ground +
 		// gradient even before the first server MOVE wakes the rAF loop.
@@ -147,8 +148,9 @@
 	// cells render closer to native size, and the camera pans each tick to
 	// keep the player's head centred (centerOn).
 	Field.prototype.fit = function() {
-		var hudHeight = $('#hud').outerHeight() || 0;
-		$('#playfield').css('top', hudHeight + 'px');
+		var hudEl = document.getElementById('hud');
+		var hudHeight = (hudEl && hudEl.offsetHeight) || 0;
+		document.getElementById('playfield').style.top = hudHeight + 'px';
 
 		var availW = Math.max(160, window.innerWidth - 8);
 		var availH = Math.max(160, window.innerHeight - hudHeight - 8);

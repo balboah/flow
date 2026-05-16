@@ -20,13 +20,13 @@
 		this.ownName = null;
 		this.scores = {};
 
-		this.$nameInput = $('#name-input');
-		this.$ownScore = $('#own-score');
-		this.$scores = $('#scores');
+		this.nameInput = document.getElementById('name-input');
+		this.ownScore = document.getElementById('own-score');
+		this.scoresEl = document.getElementById('scores');
 
 		var self = this;
-		this.$nameInput.on('change blur', function(){
-			var v = self.$nameInput.val().trim();
+		var commitName = function(){
+			var v = self.nameInput.value.trim();
 			if (v && v !== self.ownName) {
 				self.ownName = v;
 				if (self.ownId != null && self.scores[self.ownId]) {
@@ -35,10 +35,12 @@
 				self.render();
 				game.send({Command: 'RENAME', Payload: v});
 			}
-		});
-		this.$nameInput.on('keydown', function(ev){
+		};
+		this.nameInput.addEventListener('change', commitName);
+		this.nameInput.addEventListener('blur', commitName);
+		this.nameInput.addEventListener('keydown', function(ev){
 			if (ev.keyCode === 13) {
-				self.$nameInput.blur();
+				self.nameInput.blur();
 			}
 		});
 	}
@@ -46,7 +48,7 @@
 	HUD.prototype.welcome = function(payload) {
 		this.ownId = payload.Id;
 		this.ownName = payload.Name;
-		this.$nameInput.val(payload.Name);
+		this.nameInput.value = payload.Name;
 		this.render();
 	};
 
@@ -65,7 +67,7 @@
 
 	HUD.prototype.render = function() {
 		if (this.ownId != null && this.scores[this.ownId]) {
-			this.$ownScore.text(this.scores[this.ownId].score);
+			this.ownScore.textContent = this.scores[this.ownId].score;
 		}
 		var html = '';
 		var ids = Object.keys(this.scores).sort(function(a, b){
@@ -83,7 +85,7 @@
 				': ' + entry.score +
 				'</span>';
 		}
-		this.$scores.html(html);
+		this.scoresEl.innerHTML = html;
 		// HUD height can change when scores wrap on narrow viewports — ask
 		// the field to refit so the canvas never overflows.
 		if (this.game && this.game.field && this.game.field.fit) {

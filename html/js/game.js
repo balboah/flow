@@ -1,7 +1,5 @@
 (function(){
 
-	var $document = $(document);
-
 	var STORAGE_NAME = 'flow.name';
 	var STORAGE_TOKEN = 'flow.token';
 
@@ -17,6 +15,15 @@
 
 		ws: null,
 
+		// Stored handler references so re-binding (on reconnect) can detach the
+		// previous listener before attaching a new one. Replaces the jQuery
+		// `.off('event.flow').on('event.flow', fn)` namespace dance.
+		_keydownHandler: null,
+		_touchStartHandler: null,
+		_touchMoveHandler: null,
+		_touchEndHandler: null,
+		_welcomeSubmitHandler: null,
+
 		init: function(){
 			game.field = new Field();
 			game.hud = new HUD(game);
@@ -27,22 +34,25 @@
 		},
 
 		showWelcome: function(prefill){
-			var $panel = $('#welcome');
-			var $form = $('#welcome-form');
-			var $input = $('#welcome-name');
+			var panel = document.getElementById('welcome');
+			var form = document.getElementById('welcome-form');
+			var input = document.getElementById('welcome-name');
 			if (prefill) {
-				$input.val(prefill);
+				input.value = prefill;
 			}
-			$panel.removeAttr('hidden');
+			panel.hidden = false;
 			setTimeout(function(){
-				$input.focus();
-				$input[0] && $input[0].select && $input[0].select();
+				input.focus();
+				if (input.select) input.select();
 			}, 0);
-			$form.off('submit').on('submit', function(ev){
+			if (game._welcomeSubmitHandler) {
+				form.removeEventListener('submit', game._welcomeSubmitHandler);
+			}
+			game._welcomeSubmitHandler = function(ev){
 				ev.preventDefault();
-				var v = $input.val().trim();
+				var v = input.value.trim();
 				if (!v) {
-					$input.focus();
+					input.focus();
 					return;
 				}
 				// User gesture — kick the audio context awake here so the
@@ -54,26 +64,29 @@
 					sounds.startMusic();
 				}
 				storeKey(STORAGE_NAME, v);
-				$panel.attr('hidden', true);
+				panel.hidden = true;
 				game.connect(v);
-			});
+			};
+			form.addEventListener('submit', game._welcomeSubmitHandler);
 		},
 
 		bindGameOver: function(){
-			var $panel = $('#gameover');
-			var $reason = $('#gameover-reason');
-			var $score = $('#gameover-score');
-			$('#gameover-restart').on('click', function(){
-				$panel.attr('hidden', true);
+			var panel = document.getElementById('gameover');
+			var reason = document.getElementById('gameover-reason');
+			var score = document.getElementById('gameover-score');
+			document.getElementById('gameover-restart').addEventListener('click', function(){
+				panel.hidden = true;
 				game.send({Command: 'RESPAWN'});
 			});
-			game.showGameOver = function(reason, score) {
-				$reason.text(reason || 'You died.');
-				$score.text(score != null ? score : 0);
-				$panel.removeAttr('hidden').find('button').focus();
+			game.showGameOver = function(reasonText, scoreVal) {
+				reason.textContent = reasonText || 'You died.';
+				score.textContent = scoreVal != null ? scoreVal : 0;
+				panel.hidden = false;
+				var btn = panel.querySelector('button');
+				if (btn) btn.focus();
 			};
 			game.hideGameOver = function() {
-				$panel.attr('hidden', true);
+				panel.hidden = true;
 			};
 		},
 
@@ -119,7 +132,10 @@
 				}
 			}
 
-			$document.off('keydown.flow').on('keydown.flow', function(ev){
+			if (game._keydownHandler) {
+				document.removeEventListener('keydown', game._keydownHandler);
+			}
+			game._keydownHandler = function(ev){
 				if (ev.target && ev.target.tagName === 'INPUT') {
 					return;
 				}
@@ -130,7 +146,8 @@
 				if (ev.keyCode === 71) {
 					game.field.grid();
 				}
-			});
+			};
+			document.addEventListener('keydown', game._keydownHandler);
 
 			// Touch swipe controls. Fires MOVE as soon as the gesture crosses
 			// the threshold (touchmove), not when the finger lifts — waiting
@@ -139,21 +156,28 @@
 			var startX = null, startY = null;
 			var firedThisGesture = false;
 			var SWIPE_PX = 18;
-			var $field = $('#playfield');
-			$field.off('touchstart.flow touchmove.flow touchend.flow touchcancel.flow');
-			$field.on('touchstart.flow', function(ev){
-				var t = ev.originalEvent.touches[0];
+			var field = document.getElementById('playfield');
+
+			if (game._touchStartHandler) {
+				field.removeEventListener('touchstart', game._touchStartHandler);
+				field.removeEventListener('touchmove', game._touchMoveHandler);
+				field.removeEventListener('touchend', game._touchEndHandler);
+				field.removeEventListener('touchcancel', game._touchEndHandler);
+			}
+
+			game._touchStartHandler = function(ev){
+				var t = ev.touches[0];
 				if (!t) return;
 				startX = t.clientX;
 				startY = t.clientY;
 				firedThisGesture = false;
 				ev.preventDefault();
-			});
-			$field.on('touchmove.flow', function(ev){
+			};
+			game._touchMoveHandler = function(ev){
 				if (startX === null) return;
 				ev.preventDefault();
 				if (firedThisGesture) return;
-				var t = ev.originalEvent.touches[0];
+				var t = ev.touches[0];
 				if (!t) return;
 				var dx = t.clientX - startX;
 				var dy = t.clientY - startY;
@@ -166,14 +190,14 @@
 				}
 				steer(dir);
 				firedThisGesture = true;
-			});
-			$field.on('touchend.flow touchcancel.flow', function(ev){
+			};
+			game._touchEndHandler = function(ev){
 				// Tap-without-swipe fallback: if the finger lifted without
 				// crossing the threshold, fall back to the touchend-based
 				// direction so a quick tap-flick still registers.
 				if (startX === null) return;
 				if (!firedThisGesture) {
-					var t = (ev.originalEvent.changedTouches || [])[0];
+					var t = (ev.changedTouches || [])[0];
 					if (t) {
 						var dx = t.clientX - startX;
 						var dy = t.clientY - startY;
@@ -189,7 +213,12 @@
 					}
 				}
 				startX = null; startY = null; firedThisGesture = false;
-			});
+			};
+
+			field.addEventListener('touchstart', game._touchStartHandler);
+			field.addEventListener('touchmove', game._touchMoveHandler);
+			field.addEventListener('touchend', game._touchEndHandler);
+			field.addEventListener('touchcancel', game._touchEndHandler);
 		},
 
 		// Send packet to server
