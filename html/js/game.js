@@ -118,27 +118,32 @@
 				}
 			});
 
-			// Touch swipe controls. Tracks the first finger from touchstart to
-			// touchend and sends MOVE in the dominant axis if the swipe exceeds
-			// a small threshold.
+			// Touch swipe controls. Bound to #playfield so HUD interaction
+			// (typing in the name input, scrolling the leaderboard) still
+			// behaves normally. The CSS `touch-action: none` on the canvas
+			// prevents the browser from scrolling the page on the same
+			// gesture; preventDefault is a backup for older browsers.
 			var startX = null, startY = null;
-			$document.off('touchstart.flow touchmove.flow touchend.flow');
-			$document.on('touchstart.flow', function(ev){
+			var $field = $('#playfield');
+			$field.off('touchstart.flow touchmove.flow touchend.flow touchcancel.flow');
+			$field.on('touchstart.flow', function(ev){
 				var t = ev.originalEvent.touches[0];
 				if (!t) return;
 				startX = t.clientX;
 				startY = t.clientY;
+				ev.preventDefault();
 			});
-			$document.on('touchmove.flow', function(ev){
+			$field.on('touchmove.flow', function(ev){
 				if (startX !== null) ev.preventDefault();
 			});
-			$document.on('touchend.flow', function(ev){
+			$field.on('touchend.flow touchcancel.flow', function(ev){
 				if (startX === null) return;
-				var t = ev.originalEvent.changedTouches[0];
-				if (!t) { startX = null; startY = null; return; }
-				var dx = t.clientX - startX;
-				var dy = t.clientY - startY;
+				var t = (ev.originalEvent.changedTouches || [])[0];
+				var sx = startX, sy = startY;
 				startX = null; startY = null;
+				if (!t) return;
+				var dx = t.clientX - sx;
+				var dy = t.clientY - sy;
 				if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
 				var dir;
 				if (Math.abs(dx) > Math.abs(dy)) {

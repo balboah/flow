@@ -12,6 +12,20 @@
 		return Math.round(50 + Math.random() * 150);
 	}
 
+	// stepDelta returns the signed one-cell delta from `from` to `to` along
+	// each axis. The field wraps so a delta of magnitude > 1 means the cells
+	// are adjacent across an edge; we flip the sign in that case so the
+	// returned delta always represents the *actual* one-cell step.
+	function stepDelta(from, to) {
+		var dx = to.X - from.X;
+		var dy = to.Y - from.Y;
+		if (dx > 1)  dx = -1;
+		if (dx < -1) dx = 1;
+		if (dy > 1)  dy = -1;
+		if (dy < -1) dy = 1;
+		return {dx: dx, dy: dy};
+	}
+
 
 	var Worm = function(id, flow) {
 		var grid = flow.options.grid;
@@ -92,9 +106,18 @@
 		for (; i < l; i++) {
 			curr = positions[i];
 			next = positions[i + 1];
-
-			x = (curr.X <= next.X ? curr.X : next.X + 1) * grid;
-			y = (curr.Y <= next.Y ? curr.Y : next.Y + 1) * grid;
+			// |delta| > 1 means this pair sits across a wrap-around edge.
+			// Skip the cell-spanning interpolation in that case — the body
+			// part should appear at `curr` itself so it re-enters on the
+			// opposite side without snapping through the middle of the field.
+			var wrapped = Math.abs(next.X - curr.X) > 1 || Math.abs(next.Y - curr.Y) > 1;
+			if (wrapped) {
+				x = curr.X * grid;
+				y = curr.Y * grid;
+			} else {
+				x = (curr.X <= next.X ? curr.X : next.X + 1) * grid;
+				y = (curr.Y <= next.Y ? curr.Y : next.Y + 1) * grid;
+			}
 
 			part = this.parts[i];
 			part.setPosition({x: x, y: y});
@@ -126,84 +149,92 @@
 		this.dot.setPosition({x: x + grid / 2, y: y + grid / 2});
 		this.dot.setRadius(grid / 5);
 
-		if (curr.X === next.X) {
-			// Sprite 1 - head up
-			if (curr.Y < next.Y) {
+		// Determine the head's facing direction. After a wrap step, the raw
+		// (curr - next) sign would point backwards because next sits on the
+		// opposite edge; stepDelta normalises the 1-cell step.
+		var d = stepDelta(curr, next);
+
+		if (d.dx === 0) {
+			// Sprite 1 - head up (next is below curr -> worm moved up)
+			if (d.dy > 0) {
 				part.setIndex(1);
 			}
 			// Sprite 2 - head down
-			else if (curr.Y > next.Y) {
+			else if (d.dy < 0) {
 				part.setIndex(2);
 			}
 		}
 		else {
 			// Sprite 0 - head left
-			if (curr.X < next.X) {
+			if (d.dx > 0) {
 				part.setIndex(0);
 			}
 			// Sprite 3 - head right
-			else if (curr.X > next.X) {
+			else if (d.dx < 0) {
 				part.setIndex(3);
 			}
 		}
 	};
 
 	Worm.prototype.doBody = function(part, curr, prev, next) {
-		// Sprite 12 - body left-right
-		if (next.Y === prev.Y) {
+		// Normalised one-cell deltas from curr to its neighbours.
+		var p = stepDelta(curr, prev);
+		var n = stepDelta(curr, next);
+
+		// Sprite 12 - body left-right (both neighbours on the same row)
+		if (p.dy === 0 && n.dy === 0) {
 			part.setIndex(12);
+			return;
 		}
 		// Sprite 13 - body top-down
-		else if (next.X === prev.X) {
+		if (p.dx === 0 && n.dx === 0) {
 			part.setIndex(13);
+			return;
 		}
-		else {
-			var px = curr.X - prev.X,
-				py = curr.Y - prev.Y,
-				nx = curr.X - next.X,
-				ny = curr.Y - next.Y;
 
-			// Sprite 4 - corner left-down
-			if ((!px && py === -1 && nx === 1 && !ny) ||
-				(px === 1 && !py && !nx && ny === -1)) {
-				part.setIndex(4);
-			}
-			// Sprite 5 - corner right-down
-			else if ((!px && py === -1 && nx === -1 && !ny) ||
-					(px === -1 && !py && !nx && ny === -1)) {
-				part.setIndex(5);
-			}
-			// Sprite 6 - corner left-up
-			else if ((!px && py === 1 && nx === 1 && !ny) ||
-					(px === 1 && !py && !nx && ny === 1)) {
-				part.setIndex(6);
-			}
-			// Sprite 7 - corner right-up
-			else if ((!px && py === 1 && nx === -1 && !ny) ||
-					(px === -1 && !py && !nx && ny === 1)) {
-				part.setIndex(7);
-			}
+		// Corner pieces. Each one matches two symmetric (prev, next) layouts.
+		// Sprite 4 - corner left-down
+		if ((p.dx === 0 && p.dy === -1 && n.dx === 1 && n.dy === 0) ||
+			(p.dx === 1 && p.dy === 0 && n.dx === 0 && n.dy === -1)) {
+			part.setIndex(4);
+		}
+		// Sprite 5 - corner right-down
+		else if ((p.dx === 0 && p.dy === -1 && n.dx === -1 && n.dy === 0) ||
+				 (p.dx === -1 && p.dy === 0 && n.dx === 0 && n.dy === -1)) {
+			part.setIndex(5);
+		}
+		// Sprite 6 - corner left-up
+		else if ((p.dx === 0 && p.dy === 1 && n.dx === 1 && n.dy === 0) ||
+				 (p.dx === 1 && p.dy === 0 && n.dx === 0 && n.dy === 1)) {
+			part.setIndex(6);
+		}
+		// Sprite 7 - corner right-up
+		else if ((p.dx === 0 && p.dy === 1 && n.dx === -1 && n.dy === 0) ||
+				 (p.dx === -1 && p.dy === 0 && n.dx === 0 && n.dy === 1)) {
+			part.setIndex(7);
 		}
 	};
 
 	Worm.prototype.doTail = function(part, curr, prev) {
-		if (curr.X === prev.X) {
-			// Sprite 9 - tail up
-			if (curr.Y > prev.Y) {
+		var d = stepDelta(curr, prev);
+
+		if (d.dx === 0) {
+			// Sprite 9 - tail up (prev is above curr)
+			if (d.dy < 0) {
 				part.setIndex(9);
 			}
 			// Sprite 10 - tail down
-			else if (curr.Y < prev.Y) {
+			else if (d.dy > 0) {
 				part.setIndex(10);
 			}
 		}
 		else {
-			// Sprite 8 - tail left
-			if (curr.X > prev.X) {
+			// Sprite 8 - tail left (prev is to the left of curr)
+			if (d.dx < 0) {
 				part.setIndex(8);
 			}
 			// Sprite 11 - tail right
-			else if (curr.X < prev.X) {
+			else if (d.dx > 0) {
 				part.setIndex(11);
 			}
 		}

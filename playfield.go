@@ -3,6 +3,7 @@ package flow
 import (
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"time"
@@ -174,6 +175,61 @@ func scorePacket(id Id, w *Worm) Packet {
 	}
 }
 
+// placeAt sets every block of w to pos so the worm starts (or respawns) at
+// a single cell. Used together with safeSpawn.
+func placeAt(w *Worm, pos Position) {
+	for i := range w.blocks {
+		w.blocks[i] = pos
+	}
+}
+
+// safeSpawn picks a random cell that's clear of every worm body and at least
+// minHeadDistance manhattan-cells away from every living worm's head, so a
+// newcomer can't be eaten in the first tick or two.
+func (p *Playfield) safeSpawn() Position {
+	const minHeadDistance = 6
+
+	occupied := map[Position]struct{}{}
+	heads := make([]Position, 0, len(p.Movables))
+	for m := range p.Movables {
+		w, ok := m.(*Worm)
+		if !ok || w.killed {
+			continue
+		}
+		for _, b := range w.blocks {
+			occupied[b] = struct{}{}
+		}
+		heads = append(heads, w.Head())
+	}
+
+	// First pass: insist on the head-distance buffer.
+	for tries := 0; tries < 200; tries++ {
+		pos := Position{X: rand.IntN(Boundary + 1), Y: rand.IntN(Boundary + 1)}
+		if _, blocked := occupied[pos]; blocked {
+			continue
+		}
+		ok := true
+		for _, h := range heads {
+			if manhattan(pos, h) < minHeadDistance {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return pos
+		}
+	}
+	// Fallback: any empty cell at all.
+	for tries := 0; tries < 200; tries++ {
+		pos := Position{X: rand.IntN(Boundary + 1), Y: rand.IntN(Boundary + 1)}
+		if _, blocked := occupied[pos]; !blocked {
+			return pos
+		}
+	}
+	// Last resort — shouldn't be reachable on a 50×50 field.
+	return Position{X: rand.IntN(Boundary + 1), Y: rand.IntN(Boundary + 1)}
+}
+
 // aiTargetCount returns how many AI bots the playfield should currently host
 // based on how many human worms are connected. The intent is to give a lone
 // human some rivals without overwhelming a real multiplayer game.
@@ -214,7 +270,7 @@ func (p *Playfield) reconcileAIs() {
 }
 
 // spawnAI inserts a fresh AI bot into the playfield with a unique
-// random-seeded persona.
+// random-seeded persona and a randomized starting cell.
 func (p *Playfield) spawnAI() {
 	personality := newPersonality()
 	// Avoid colliding with an existing token (extremely unlikely, but safe).
@@ -226,6 +282,7 @@ func (p *Playfield) spawnAI() {
 	w.personality = personality
 	w.Name = personality.Name
 	w.Token = personality.Name
+	placeAt(w, p.safeSpawn())
 	p.Tokens[w.Token] = w
 	id := p.addMovable(w)
 	p.announceJoin(w, id)
@@ -522,6 +579,7 @@ func (p *Playfield) Start() {
 				if req.Name != "" {
 					w.Name = req.Name
 				}
+				placeAt(w, p.safeSpawn())
 				p.Tokens[w.Token] = w
 				id := p.addMovable(w)
 				p.announceJoin(w, id)
@@ -568,13 +626,14 @@ func (p *Playfield) Start() {
 				p.tick()
 			case req := <-p.Respawn:
 				req.Worm.Reset()
+				placeAt(req.Worm, p.safeSpawn())
 				id, ok := p.Movables[req.Worm]
 				if !ok {
 					break
 				}
 				req.Worm.Outbox <- Packet{
 					Command: "WELCOME",
-					Payload: WelcomePayload{Id: id, Name: req.Worm.Name},
+					Payload: WelcomePayload{Id: id, Name: req.Worm.Name, Token: req.Worm.Token},
 				}
 				p.Broadcast <- scorePacket(id, req.Worm)
 			case packet := <-p.Broadcast:

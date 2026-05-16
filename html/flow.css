@@ -147,9 +147,46 @@ html, body {
 		display: block;
 		width: 100%;
 		box-sizing: border-box;
-		padding: 8px 10px;
-		font-size: 16px;
+		padding: 12px 14px;
+		font-size: 18px;
 		border: 1px solid #ccc;
-		border-radius: 5px;
-		margin-bottom: 12px;
+		border-radius: 6px;
+		margin-bottom: 14px;
 	}
+
+/* Mobile: bigger touch targets and a roomier welcome panel. */
+@media (max-width: 600px) {
+	#gameover .panel, #welcome .panel {
+		min-width: 0;
+		width: calc(100% - 32px);
+		max-width: 360px;
+		padding: 22px 22px;
+	}
+	#welcome input {
+		padding: 14px 14px;
+		font-size: 18px;
+	}
+	#gameover button, #welcome button {
+		padding: 14px 24px;
+		font-size: 16px;
+		min-width: 140px;
+	}
+	#hud {
+		font-size: 14px;
+	}
+	#hud input {
+		font-size: 16px;
+		padding: 6px 8px;
+	}
+}
+
+/* The canvas captures touch gestures for swipe-to-steer; without this the
+   browser interprets the swipe as a page scroll. The rest of the document
+   keeps default behaviour so the HUD and dialogs stay interactive. */
+#playfield,
+#playfield .kineticjs-content,
+#playfield canvas {
+	touch-action: none;
+	-webkit-user-select: none;
+	user-select: none;
+}
