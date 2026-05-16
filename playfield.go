@@ -469,7 +469,7 @@ func (p *Playfield) tick() {
 			}
 		}
 	}
-	for pos, worms := range headsAt {
+	for _, worms := range headsAt {
 		if len(worms) < 2 {
 			continue
 		}
@@ -486,9 +486,8 @@ func (p *Playfield) tick() {
 			w.deathReason = reason
 			deaths = append(deaths, death{p.Movables[w], w.deathReason})
 		}
-		_ = pos
 	}
-	for m, id := range p.Movables {
+	for m := range p.Movables {
 		w, ok := m.(*Worm)
 		if !ok || w.killed {
 			continue
@@ -502,7 +501,6 @@ func (p *Playfield) tick() {
 		victim.deathReason = "Eaten by " + w.Name
 		vid := p.Movables[victim]
 		deaths = append(deaths, death{vid, victim.deathReason})
-		_ = id
 	}
 
 	// Phase 3: broadcast MOVE for living worms.
@@ -534,7 +532,9 @@ func (p *Playfield) tick() {
 }
 
 // resolveFoodCollisions checks each living worm's head against every food.
-// On a match: credit score, remove the food, broadcast EAT/SCORE/FOOD.
+// On a fruit match: credit score, broadcast EAT/SCORE. On a bomb match:
+// the worm dies; broadcast EAT/GAMEOVER instead. Either way the food is
+// removed and a replacement spawned so the field stays full.
 func (p *Playfield) resolveFoodCollisions() {
 	for m, id := range p.Movables {
 		w, ok := m.(*Worm)
@@ -546,10 +546,19 @@ func (p *Playfield) resolveFoodCollisions() {
 			if head != f.Position {
 				continue
 			}
-			w.AddScore(f.Points())
 			delete(p.Foods, fid)
 			p.Broadcast <- Packet{Command: "EAT", Payload: EatPayload{FoodId: fid, WormId: id}}
-			p.Broadcast <- scorePacket(id, w)
+			if f.Type == Bomb {
+				w.killed = true
+				w.deathReason = "Stepped on a bomb"
+				p.Broadcast <- Packet{
+					Command: "GAMEOVER",
+					Payload: GameOverPayload{WormId: id, Reason: w.deathReason},
+				}
+			} else {
+				w.AddScore(f.Points())
+				p.Broadcast <- scorePacket(id, w)
+			}
 			nf := p.spawnFood()
 			p.Broadcast <- foodPacket(nf)
 			break

@@ -1,8 +1,9 @@
 (function(){
 
 	var FOOD_EMOJI = {
-		apple:  '🍎',  // 🍎
-		carrot: '🥕'   // 🥕
+		apple:  '🍎',
+		carrot: '🥕',
+		bomb:   '💣'
 	};
 
 	// Pre-render each emoji into an offscreen canvas. Many KineticJS 5.x setups
@@ -28,6 +29,11 @@
 		return c;
 	}
 
+	// Food renders 9 sprites in a 3×3 tile arrangement so that as the camera
+	// pans past a field edge in camera-follow mode the next tile's copy comes
+	// into view — no food ever "vanishes" at the boundary. Eight of the nine
+	// copies lie outside the canonical 0..logicalSize rect; they only become
+	// visible when the camera has panned beyond an edge.
 	function Food(payload, field) {
 		this.id = payload.Id;
 		this.x = payload.X;
@@ -37,25 +43,33 @@
 		this.field = field;
 
 		var grid = field.options.grid;
+		var fieldPx = field.logicalSize;
 		var glyph = FOOD_EMOJI[this.type] || '?';
 		var bitmap = bitmapFor(glyph, grid);
 
-		this.shape = new Kinetic.Image({
-			x: this.x * grid,
-			y: this.y * grid,
-			width: grid,
-			height: grid,
-			image: bitmap
-		});
-
-		field.foodLayer.add(this.shape);
+		this.shapes = [];
+		for (var tx = -1; tx <= 1; tx++) {
+			for (var ty = -1; ty <= 1; ty++) {
+				var shape = new Kinetic.Image({
+					x: this.x * grid + tx * fieldPx,
+					y: this.y * grid + ty * fieldPx,
+					width: grid,
+					height: grid,
+					image: bitmap
+				});
+				field.foodLayer.add(shape);
+				this.shapes.push(shape);
+			}
+		}
 		field.foodLayer.draw();
 
 		return this;
 	}
 
 	Food.prototype.destroy = function(){
-		this.shape.destroy();
+		for (var i = 0; i < this.shapes.length; i++) {
+			this.shapes[i].destroy();
+		}
 		this.field.foodLayer.draw();
 	};
 

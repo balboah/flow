@@ -1,7 +1,12 @@
 html, body {
 	min-height: 100%;
 	margin: 0;
-	background: #f6f6f6;
+	/* Deep night-sky gradient. Subtle violet wash so the playfield doesn't
+	   look like a solid black slab, and bright food/worm sprites pop. */
+	background:
+		radial-gradient(ellipse at 50% 30%, #1a1d36 0%, #0a0b1a 60%, #050616 100%);
+	background-attachment: fixed;
+	color: #d8dbe9;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -82,8 +87,15 @@ html, body {
 	overflow: hidden;
 }
 	#playfield .kineticjs-content {
-		background: #fff;
-		border: solid 2px #ccc;
+		/* Slight gradient + violet tint instead of pure black so the
+		   procedurally-drawn ground dots and any subtle structural
+		   accents are visible without overpowering the worms/food. */
+		background:
+			radial-gradient(ellipse at 50% 50%, #14172b 0%, #0a0c1c 80%, #07081a 100%);
+		border: solid 1px #2c2f48;
+		box-shadow:
+			inset 0 0 80px rgba(80, 60, 120, 0.18),
+			0 0 30px rgba(0, 0, 0, 0.5);
 		line-height: 0;
 	}
 		#playfield .kineticjs-content canvas {

@@ -51,6 +51,7 @@
 				if (window.sounds) {
 					sounds.init();
 					sounds.welcome();
+					sounds.startMusic();
 				}
 				storeKey(STORAGE_NAME, v);
 				$panel.attr('hidden', true);
@@ -189,16 +190,9 @@
 			move: function(payload) {
 				var worm = game.field.getWorm(payload.Id);
 				worm.move(payload.Positions);
-				// Keep the local player's head centered when the field's in
-				// camera-follow mode (narrow viewports).
-				if (payload.Id === game.hud.ownId && payload.Positions.length > 0) {
-					var head = payload.Positions[0];
-					var grid = game.field.options.grid;
-					game.field.centerOn(
-						head.X * grid + grid / 2,
-						head.Y * grid + grid / 2
-					);
-				}
+				// Camera follow (in camera mode) is driven by Field's rAF
+				// loop so it tweens with the interpolated head rather than
+				// snapping to the end target ahead of the sprite.
 			},
 
 			kill: function(payload) {
@@ -214,7 +208,8 @@
 			eat: function(payload) {
 				var food = game.field.foods[payload.FoodId];
 				if (window.sounds && payload.WormId === game.hud.ownId && food) {
-					if (food.type === 'apple') sounds.apple();
+					if (food.type === 'bomb') sounds.bomb();
+					else if (food.type === 'apple') sounds.apple();
 					else sounds.carrot();
 				}
 				game.field.removeFood(payload.FoodId);
