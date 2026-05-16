@@ -449,6 +449,25 @@
 		}
 	};
 
+	// previewDirection rotates the head sprite to face `dirName` immediately,
+	// without waiting for the server to confirm. The next MOVE packet's
+	// doHead() will overwrite this preview based on the actual cell delta
+	// (so a server-rejected U-turn snaps back). Pure client-side feedback —
+	// the worm doesn't actually move until the server says so.
+	Worm.prototype.previewDirection = function(dirName) {
+		if (!this.parts || !this.parts[0]) return;
+		var frame;
+		switch (dirName) {
+			case 'LEFT':  frame = 0; break;
+			case 'UP':    frame = 1; break;
+			case 'DOWN':  frame = 2; break;
+			case 'RIGHT': frame = 3; break;
+			default: return;
+		}
+		this.parts[0].setIndex(frame);
+		this.layer.batchDraw();
+	};
+
 	Worm.prototype.kill = function() {
 		// Null tween state so any in-flight rAF tick treats this worm as
 		// inactive instead of poking at the destroyed Kinetic layer.

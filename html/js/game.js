@@ -105,26 +105,40 @@
 		},
 
 		bindControls: function(){
+			// Send a MOVE and give the local head sprite immediate visual
+			// feedback. The server is still authoritative — it'll either
+			// confirm the direction on the next tick (200ms) or reject it
+			// (U-turn / invalid). Showing the rotation now hides the input
+			// latency without lying about the worm's actual position.
+			function steer(dir) {
+				game.send({Command: 'MOVE', Payload: dir});
+				if (game.hud && game.hud.ownId != null &&
+					game.field && game.field.worms[game.hud.ownId] &&
+					game.field.worms[game.hud.ownId].previewDirection) {
+					game.field.worms[game.hud.ownId].previewDirection(dir);
+				}
+			}
+
 			$document.off('keydown.flow').on('keydown.flow', function(ev){
 				if (ev.target && ev.target.tagName === 'INPUT') {
 					return;
 				}
 				if ([37, 38, 39, 40].indexOf(ev.keyCode) > -1) {
 					ev.preventDefault();
-					var dir = {37: 'LEFT', 38: 'UP', 39: 'RIGHT', 40: 'DOWN'}[ev.keyCode];
-					game.send({Command: 'MOVE', Payload: dir});
+					steer({37: 'LEFT', 38: 'UP', 39: 'RIGHT', 40: 'DOWN'}[ev.keyCode]);
 				}
 				if (ev.keyCode === 71) {
 					game.field.grid();
 				}
 			});
 
-			// Touch swipe controls. Bound to #playfield so HUD interaction
-			// (typing in the name input, scrolling the leaderboard) still
-			// behaves normally. The CSS `touch-action: none` on the canvas
-			// prevents the browser from scrolling the page on the same
-			// gesture; preventDefault is a backup for older browsers.
+			// Touch swipe controls. Fires MOVE as soon as the gesture crosses
+			// the threshold (touchmove), not when the finger lifts — waiting
+			// for touchend adds 100-200ms of swipe completion time before
+			// the server even sees the input.
 			var startX = null, startY = null;
+			var firedThisGesture = false;
+			var SWIPE_PX = 18;
 			var $field = $('#playfield');
 			$field.off('touchstart.flow touchmove.flow touchend.flow touchcancel.flow');
 			$field.on('touchstart.flow', function(ev){
@@ -132,27 +146,49 @@
 				if (!t) return;
 				startX = t.clientX;
 				startY = t.clientY;
+				firedThisGesture = false;
 				ev.preventDefault();
 			});
 			$field.on('touchmove.flow', function(ev){
-				if (startX !== null) ev.preventDefault();
-			});
-			$field.on('touchend.flow touchcancel.flow', function(ev){
 				if (startX === null) return;
-				var t = (ev.originalEvent.changedTouches || [])[0];
-				var sx = startX, sy = startY;
-				startX = null; startY = null;
+				ev.preventDefault();
+				if (firedThisGesture) return;
+				var t = ev.originalEvent.touches[0];
 				if (!t) return;
-				var dx = t.clientX - sx;
-				var dy = t.clientY - sy;
-				if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+				var dx = t.clientX - startX;
+				var dy = t.clientY - startY;
+				if (Math.abs(dx) < SWIPE_PX && Math.abs(dy) < SWIPE_PX) return;
 				var dir;
 				if (Math.abs(dx) > Math.abs(dy)) {
 					dir = dx > 0 ? 'RIGHT' : 'LEFT';
 				} else {
 					dir = dy > 0 ? 'DOWN' : 'UP';
 				}
-				game.send({Command: 'MOVE', Payload: dir});
+				steer(dir);
+				firedThisGesture = true;
+			});
+			$field.on('touchend.flow touchcancel.flow', function(ev){
+				// Tap-without-swipe fallback: if the finger lifted without
+				// crossing the threshold, fall back to the touchend-based
+				// direction so a quick tap-flick still registers.
+				if (startX === null) return;
+				if (!firedThisGesture) {
+					var t = (ev.originalEvent.changedTouches || [])[0];
+					if (t) {
+						var dx = t.clientX - startX;
+						var dy = t.clientY - startY;
+						if (Math.abs(dx) >= 20 || Math.abs(dy) >= 20) {
+							var dir;
+							if (Math.abs(dx) > Math.abs(dy)) {
+								dir = dx > 0 ? 'RIGHT' : 'LEFT';
+							} else {
+								dir = dy > 0 ? 'DOWN' : 'UP';
+							}
+							steer(dir);
+						}
+					}
+				}
+				startX = null; startY = null; firedThisGesture = false;
 			});
 		},
 
