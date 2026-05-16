@@ -86,7 +86,7 @@ html, body {
 	justify-content: center;
 	overflow: hidden;
 }
-	#playfield .kineticjs-content {
+	#playfield .playfield-canvas {
 		/* Slight gradient + violet tint instead of pure black so the
 		   procedurally-drawn ground dots and any subtle structural
 		   accents are visible without overpowering the worms/food. */
@@ -96,11 +96,8 @@ html, body {
 		box-shadow:
 			inset 0 0 80px rgba(80, 60, 120, 0.18),
 			0 0 30px rgba(0, 0, 0, 0.5);
-		line-height: 0;
+		display: block;
 	}
-		#playfield .kineticjs-content canvas {
-			display: block;
-		}
 
 #gameover, #welcome {
 	position: fixed;
@@ -196,7 +193,6 @@ html, body {
    browser interprets the swipe as a page scroll. The rest of the document
    keeps default behaviour so the HUD and dialogs stay interactive. */
 #playfield,
-#playfield .kineticjs-content,
 #playfield canvas {
 	touch-action: none;
 	-webkit-user-select: none;
