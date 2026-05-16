@@ -177,9 +177,10 @@
 	};
 
 	Worm.prototype.doBody = function(part, curr, prev, next) {
-		// Normalised one-cell deltas from curr to its neighbours.
-		var p = stepDelta(curr, prev);
-		var n = stepDelta(curr, next);
+		// Original used (curr - prev) and (curr - next); reuse those sign
+		// conventions so the existing corner conditions match.
+		var p = stepDelta(prev, curr);
+		var n = stepDelta(next, curr);
 
 		// Sprite 12 - body left-right (both neighbours on the same row)
 		if (p.dy === 0 && n.dy === 0) {

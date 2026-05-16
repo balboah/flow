@@ -32,19 +32,51 @@
 	};
 
 	// fit resizes the stage canvas to whatever fits in the viewport (below the
-	// HUD) while keeping the logical 50×50 grid intact via Kinetic's scale.
+	// HUD). On viewports large enough to show the whole 50×50 field at a
+	// comfortable cell size, we use "fit" mode (entire field scaled to fit).
+	// On narrower viewports, we switch to "camera" mode: the canvas fills the
+	// viewport, the cells render closer to native size, and the stage is
+	// panned each tick to keep the player's head centred (centerOn()).
 	Field.prototype.fit = function() {
 		var hudHeight = $('#hud').outerHeight() || 0;
-		// Push the playfield container below the (possibly wrapping) HUD.
 		$('#playfield').css('top', hudHeight + 'px');
-		var avail = Math.min(
-			window.innerWidth - 8,
-			window.innerHeight - hudHeight - 8
-		);
-		var size = Math.max(160, Math.min(avail, this.logicalSize));
-		var scale = size / this.logicalSize;
-		this.stage.size({width: size, height: size});
-		this.stage.scale({x: scale, y: scale});
+
+		var availW = Math.max(160, window.innerWidth - 8);
+		var availH = Math.max(160, window.innerHeight - hudHeight - 8);
+		var avail = Math.min(availW, availH);
+
+		// What scale would fit the whole field? If that scale shrinks cells
+		// below comfortPx, drop into camera-follow mode at a native-ish scale.
+		var fitScale = avail / this.logicalSize;
+		var nativeCellPx = this.options.grid;
+		var comfortPx = 14; // smallest cell size we tolerate in fit mode
+		var comfortScale = comfortPx / nativeCellPx;
+
+		if (fitScale < comfortScale) {
+			this.cameraMode = true;
+			var cameraScale = Math.min(0.9, Math.max(comfortScale, fitScale * 1.6));
+			this.stage.size({width: availW, height: availH});
+			this.stage.scale({x: cameraScale, y: cameraScale});
+		} else {
+			this.cameraMode = false;
+			this.stage.size({width: avail, height: avail});
+			this.stage.scale({x: fitScale, y: fitScale});
+			this.stage.position({x: 0, y: 0});
+		}
+		this.stage.batchDraw();
+	};
+
+	// centerOn pans the stage so a logical pixel point (x, y) sits at the
+	// middle of the visible canvas. No-op outside camera mode.
+	Field.prototype.centerOn = function(x, y) {
+		if (!this.cameraMode) return;
+		var s = this.stage.scale().x;
+		var w = this.stage.width();
+		var h = this.stage.height();
+		this.stage.position({
+			x: w / 2 - x * s,
+			y: h / 2 - y * s
+		});
 		this.stage.batchDraw();
 	};
 

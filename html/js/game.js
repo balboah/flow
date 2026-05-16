@@ -187,7 +187,18 @@
 			},
 
 			move: function(payload) {
-				game.field.getWorm(payload.Id).move(payload.Positions);
+				var worm = game.field.getWorm(payload.Id);
+				worm.move(payload.Positions);
+				// Keep the local player's head centered when the field's in
+				// camera-follow mode (narrow viewports).
+				if (payload.Id === game.hud.ownId && payload.Positions.length > 0) {
+					var head = payload.Positions[0];
+					var grid = game.field.options.grid;
+					game.field.centerOn(
+						head.X * grid + grid / 2,
+						head.Y * grid + grid / 2
+					);
+				}
 			},
 
 			kill: function(payload) {
