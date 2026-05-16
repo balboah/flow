@@ -4,10 +4,10 @@
 .jj
 .claude
 .playwright-mcp
-# Test/debug screenshots are PNGs at repo root. Exclude all PNGs then
-# explicitly re-include the html/img/ sprite atlases the client needs.
-*.png
-!html/img/*.png
+# Test/debug screenshots are excluded one layer earlier by .gcloudignore
+# (anchored /test*.png /snake*.png). At Docker level we only need to skip
+# the local build binary; sprite atlases under html/img/ must ship.
+/flow/flow
 *.md
 *_test.go
 Dockerfile

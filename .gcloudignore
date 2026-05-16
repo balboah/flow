@@ -1,0 +1,36 @@
+# When `.gcloudignore` is absent, `gcloud run deploy --source=.` falls back
+# to `.gitignore`, which excludes every `*.png` (test screenshots live there).
+# That dropped the html/img sprite atlases the client renders, so we override
+# with an explicit allowlist for the static assets and use anchored patterns
+# for the things we genuinely want to skip uploading.
+
+# VCS / tooling
+.git
+.gitignore
+.gcloudignore
+.jj
+.claude
+.playwright-mcp
+
+# Tests don't run in the container
+*_test.go
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*.swo
+.idea
+.vscode
+*.sublime-*
+
+# Local build artifacts
+/flow/flow
+
+# Repo-root debug screenshots (these patterns match repo root since we don't
+# want to exclude html/img/*.png — which gitignore would).
+/test*.png
+/snake*.png
+
+# Source-only artifacts not used at runtime
+sprites/
+.travis.yml
