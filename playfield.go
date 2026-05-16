@@ -478,10 +478,12 @@ func (p *Playfield) tick() {
 		}
 	}
 
-	// Phase 2: snake-on-snake.
+	// Phase 2: snake-on-snake — slither.io-style rules.
 	//   - If 2+ worms have heads at the same cell, they all die (head-on).
-	//   - Otherwise, if a worm's head sits on another worm's body, that
-	//     other worm is eaten (the head's worm survives).
+	//   - Otherwise, if a worm's head crashes into another worm's body,
+	//     the *head's* owner dies (your body is a hazard to anyone who
+	//     touches it with their head). This is the inverse of "eating from
+	//     the side", which removes the entire skill of body positioning.
 	headsAt := map[Position][]*Worm{}
 	bodies := map[Position]*Worm{}
 	for m := range p.Movables {
@@ -515,20 +517,19 @@ func (p *Playfield) tick() {
 			deaths = append(deaths, death{p.Movables[w], w.deathReason})
 		}
 	}
-	for m := range p.Movables {
+	for m, id := range p.Movables {
 		w, ok := m.(*Worm)
 		if !ok || w.killed {
 			continue
 		}
 		head := w.Head()
-		victim, hit := bodies[head]
-		if !hit || victim == w || victim.killed {
+		owner, hit := bodies[head]
+		if !hit || owner == w {
 			continue
 		}
-		victim.killed = true
-		victim.deathReason = "Eaten by " + w.Name
-		vid := p.Movables[victim]
-		deaths = append(deaths, death{vid, victim.deathReason})
+		w.killed = true
+		w.deathReason = "Crashed into " + owner.Name
+		deaths = append(deaths, death{id, w.deathReason})
 	}
 
 	// Phase 3: broadcast MOVE for living worms.

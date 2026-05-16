@@ -14,11 +14,6 @@ type AIPersonality struct {
 	// FoodPull weights how strongly the bot pursues the nearest food (per
 	// cell closer to it).
 	FoodPull float64
-	// HuntPull weights how strongly the bot tries to bite an opponent's
-	// body (per cell closer to the nearest opposing body cell). Eating
-	// another worm's body kills the victim — bots with high HuntPull are
-	// predatory, low HuntPull are scavengers.
-	HuntPull float64
 	// Inertia is the bonus for continuing in the worm's current heading.
 	// High values produce a "committed" bot that doesn't twitch.
 	Inertia float64
@@ -38,7 +33,6 @@ func newPersonality() AIPersonality {
 		Seed:           seed,
 		Name:           fmt.Sprintf("Bot-%04X", uint16(seed)),
 		FoodPull:       0.8 + r.Float64()*2.0,   // 0.8 – 2.8
-		HuntPull:       0.4 + r.Float64()*2.0,   // 0.4 – 2.4
 		Inertia:        0.5 + r.Float64()*2.5,   // 0.5 – 3.0
 		CenterPull:     r.Float64() * 0.5,       // 0.0 – 0.5
 		HesitationRate: 0.03 + r.Float64()*0.07, // 3% – 10%
@@ -64,11 +58,6 @@ func pickAIDirection(w *Worm, p *Playfield) Direction {
 	if hasTarget {
 		curFoodDist = manhattan(w.Head(), target)
 	}
-	prey, hasPrey := nearestOpponentBody(w, p)
-	curPreyDist := 0
-	if hasPrey {
-		curPreyDist = manhattan(w.Head(), prey)
-	}
 
 	type scored struct {
 		dir   Direction
@@ -82,12 +71,6 @@ func pickAIDirection(w *Worm, p *Playfield) Direction {
 			// Reward directions that close the gap. Diminishing return on
 			// distance avoids the bot wildly cornering for far-away food.
 			s += personality.FoodPull * float64(curFoodDist-manhattan(next, target))
-		}
-		if hasPrey {
-			// Bots are also players — eating an opponent's body kills it.
-			// Score for closing the distance to the nearest huntable body
-			// cell, weighted by the bot's predatory streak.
-			s += personality.HuntPull * float64(curPreyDist-manhattan(next, prey))
 		}
 		if d == w.direction && w.direction != Unknown {
 			s += personality.Inertia
@@ -116,10 +99,11 @@ func pickAIDirection(w *Worm, p *Playfield) Direction {
 }
 
 // safeDirections returns directions whose next cell would not kill us. Own
-// body is blocked (self-collision), and opponent *heads* + their predicted
-// next cell are blocked (head-on dies for both). Opponent *bodies* are NOT
-// blocked — stepping on them kills the victim, not us, so they're prey.
-// 180° reversals are excluded. The field wraps so edges aren't unsafe.
+// body, every opponent's body, every opponent's head and their predicted
+// next-head cell are all blocked — under slither.io rules, your head
+// touching anyone's body is *your* death, so the AI must steer clear of
+// all snake cells, not just its own. 180° reversals are excluded. The
+// field wraps so edges aren't unsafe.
 func safeDirections(w *Worm, p *Playfield) []Direction {
 	head := w.Head()
 	blocked := map[Position]struct{}{}
@@ -134,13 +118,16 @@ func safeDirections(w *Worm, p *Playfield) []Direction {
 		if !ok || ow == w || ow.killed {
 			continue
 		}
-		// Other worm's head this tick.
-		blocked[ow.Head()] = struct{}{}
-		// Predicted next head step. We don't know if `ow` has already
-		// re-decided this tick (Movables iteration order is random), but
-		// blocking their previous heading is still the right defensive
-		// move — at worst we forfeit one option, at best we dodge a
-		// mutual-kill collision.
+		// Opponent's entire body (incl. head) — touching any of it with
+		// our head is fatal under the new rules.
+		for i, b := range ow.blocks {
+			if ow.pendingGrowth == 0 && i == len(ow.blocks)-1 {
+				continue // tail vacates this tick
+			}
+			blocked[b] = struct{}{}
+		}
+		// Predicted next-head cell — head-on with another head still
+		// kills both, so dodge if we can.
 		if ow.direction != Unknown {
 			blocked[wrap(step(ow.Head(), ow.direction))] = struct{}{}
 		}
@@ -157,34 +144,6 @@ func safeDirections(w *Worm, p *Playfield) []Direction {
 		out = append(out, d)
 	}
 	return out
-}
-
-// nearestOpponentBody returns the closest non-head body cell of any other
-// living worm. Used by the AI's HuntPull scoring to chase prey.
-func nearestOpponentBody(self *Worm, p *Playfield) (Position, bool) {
-	var best Position
-	bestDist := -1
-	from := self.Head()
-	for m := range p.Movables {
-		ow, ok := m.(*Worm)
-		if !ok || ow == self || ow.killed {
-			continue
-		}
-		for i, b := range ow.blocks {
-			if i == 0 {
-				continue // head — biting it is a mutual kill
-			}
-			if ow.pendingGrowth == 0 && i == len(ow.blocks)-1 {
-				continue // tail will vacate this tick
-			}
-			d := manhattan(from, b)
-			if bestDist < 0 || d < bestDist {
-				bestDist = d
-				best = b
-			}
-		}
-	}
-	return best, bestDist >= 0
 }
 
 // wrap normalises a cell position onto the toroidal playfield.

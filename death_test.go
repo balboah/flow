@@ -94,7 +94,7 @@ func TestTailVacateForgiven(t *testing.T) {
 	}
 }
 
-func TestHeadIntoOtherBodyKillsVictim(t *testing.T) {
+func TestHeadIntoOtherBodyKillsTheHead(t *testing.T) {
 	p := NewPlayfield()
 	a := NewWorm()
 	a.Name = "A"
@@ -104,20 +104,20 @@ func TestHeadIntoOtherBodyKillsVictim(t *testing.T) {
 
 	b := NewWorm()
 	b.Name = "B"
-	// B faces away from A; after both move, B's body[1] sits at (11,10),
-	// which is exactly where A's head lands. (A's right-move would clip B's
-	// body cell.) Old tail at (13,10) vacates so that's not the contact.
-	b.blocks = []Position{{11, 10}, {12, 10}, {13, 10}}
-	b.direction = Right
+	// B starts vertical and moves up, so after the tick its body[1] sits at
+	// (11, 10) — exactly where A's right-move lands. Under slither.io rules
+	// A (the head's owner) dies; B (the body's owner) survives.
+	b.blocks = []Position{{11, 10}, {11, 11}, {11, 12}}
+	b.direction = Up
 	p.addMovable(b)
 
 	p.tick()
 
-	if !b.killed {
-		t.Errorf("B should be killed after A ate it, deathReason=%q", b.deathReason)
+	if !a.killed {
+		t.Errorf("A should die crashing into B's body, deathReason=%q", a.deathReason)
 	}
-	if a.killed {
-		t.Errorf("A should survive eating B, got killed: %s", a.deathReason)
+	if b.killed {
+		t.Errorf("B should survive having its body crashed into, got killed: %s", b.deathReason)
 	}
 }
 
