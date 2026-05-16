@@ -4,9 +4,10 @@
 .jj
 .claude
 .playwright-mcp
-# Test/debug screenshots live at repo root; the *.png sprite atlases under
-# html/img/ must ship in the image, so don't blanket-exclude PNGs.
-/*.png
+# Test/debug screenshots are PNGs at repo root. Exclude all PNGs then
+# explicitly re-include the html/img/ sprite atlases the client needs.
+*.png
+!html/img/*.png
 *.md
 *_test.go
 Dockerfile
