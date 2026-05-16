@@ -1,5 +1,6 @@
 package flow
 
+import "time"
 
 const (
 	Boundary       = 49 // The outer boundary of a playfield
@@ -60,6 +61,9 @@ type Worm struct {
 	// connected is true while a human-owned worm has a live websocket.
 	// Used to gate AI ticking: bots stay still when no human is online.
 	connected bool
+	// disconnectedAt records when a human worm's websocket dropped, so the
+	// playfield can sweep stale snakes after a grace period.
+	disconnectedAt time.Time
 
 	// Ticks the AI has been dead — used to auto-respawn.
 	aiDeadTicks int

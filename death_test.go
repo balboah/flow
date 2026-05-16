@@ -1,6 +1,9 @@
 package flow
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestEdgeWrap(t *testing.T) {
 	cases := []struct {
@@ -239,6 +242,36 @@ func TestInputBufferConsumedAcrossTicks(t *testing.T) {
 	w.Move(w.direction)
 	if w.direction != Left {
 		t.Errorf("Expected direction Left after second tick, got %v", w.direction)
+	}
+}
+
+func TestDisconnectTTLSweepsStaleWorms(t *testing.T) {
+	p := NewPlayfield()
+
+	add := func(token string, connected bool, disconnectedAt time.Time) *Worm {
+		w := NewWorm()
+		w.Token = token
+		w.connected = connected
+		w.disconnectedAt = disconnectedAt
+		p.Tokens[token] = w
+		p.addMovable(w)
+		return w
+	}
+
+	add("live", true, time.Time{})
+	add("fresh", false, time.Now())
+	add("stale", false, time.Now().Add(-2*DisconnectTTL))
+
+	p.tick()
+
+	if _, ok := p.Tokens["live"]; !ok {
+		t.Errorf("Connected worm should remain")
+	}
+	if _, ok := p.Tokens["fresh"]; !ok {
+		t.Errorf("Recently disconnected worm should remain")
+	}
+	if _, ok := p.Tokens["stale"]; ok {
+		t.Errorf("Long-disconnected worm should be swept")
 	}
 }
 

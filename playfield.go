@@ -15,6 +15,12 @@ func joinNames(names []string) string {
 // How fast playfields switch packets to clients
 const Tick = 200
 
+// DisconnectTTL is how long a human worm lingers in the field after its
+// websocket drops, before the playfield removes it. Long enough that a
+// browser refresh reconnects to the same snake, short enough that idle
+// snakes don't pile up and stall the broadcast layer.
+const DisconnectTTL = 5 * time.Second
+
 type Id uint
 
 // The lobby takes care of listing all playfields
@@ -319,6 +325,27 @@ drained:
 // walls / self / other snakes, then broadcast MOVE for survivors and GAMEOVER
 // for any newly-dead worm.
 func (p *Playfield) tick() {
+	// First, sweep human worms whose owners have been disconnected past the
+	// TTL. With wrap-around they never die naturally, so without this they'd
+	// accumulate forever and stall announceJoin's per-worm SCORE writes.
+	now := time.Now()
+	var stale []Movable
+	for m := range p.Movables {
+		w, ok := m.(*Worm)
+		if !ok || w.AI || w.connected {
+			continue
+		}
+		if !w.disconnectedAt.IsZero() && now.Sub(w.disconnectedAt) > DisconnectTTL {
+			stale = append(stale, m)
+		}
+	}
+	if len(stale) > 0 {
+		for _, m := range stale {
+			p.removeMovable(m)
+		}
+		p.reconcileAIs()
+	}
+
 	// AI bots only run while a human has a live websocket — keeps them from
 	// growing out of reach in an empty field.
 	anyHumanOnline := false
@@ -506,6 +533,11 @@ func (p *Playfield) Start() {
 				}
 			case s := <-p.ConnState:
 				s.Worm.connected = s.Connected
+				if s.Connected {
+					s.Worm.disconnectedAt = time.Time{}
+				} else {
+					s.Worm.disconnectedAt = time.Now()
+				}
 				p.reconcileAIs()
 			case req := <-p.MoveCmd:
 				w := req.Worm
