@@ -36,9 +36,11 @@ Build pulls the working copy (filtered by `.gcloudignore`), builds the
 container per the root `Dockerfile`, pushes it to Artifact Registry, and
 rolls a new revision.
 
-The active gcloud project is implicit — `make deploy` uses whatever
-`gcloud config get-value project` returns. Set it once per machine; nothing
-about the deployment target is checked into this repo.
+The gcloud project is `snakeflow`. `make deploy` uses whatever
+`gcloud config get-value project` returns, so set it once with
+`gcloud config set project snakeflow` and the Makefile picks it up.
+The Cloud Run URL itself is intentionally not documented here — look it
+up with `gcloud run services list --region=…` if you need it.
 
 Service name and region default to the production values in the `Makefile`
 and can be overridden per-invocation (`CLOUD_RUN_SERVICE=…
