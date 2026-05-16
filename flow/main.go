@@ -3,11 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/balboah/flow"
 	"log"
-	"math/rand"
 	"net/http"
-	"time"
+
+	"github.com/balboah/flow"
 )
 
 var (
@@ -18,13 +17,12 @@ var (
 func main() {
 	flag.Parse()
 
-	rand.Seed(time.Now().UTC().UnixNano())
-	log.Printf("Starting flow server at %v\n", fmt.Sprintf(":%v", *port))
+	addr := fmt.Sprintf(":%v", *port)
+	log.Printf("Starting flow server at %v\n", addr)
 	http.Handle("/worms", flow.WormsHandler())
 	http.Handle("/", http.FileServer(http.Dir(*root)))
 
-	err := http.ListenAndServe(fmt.Sprintf(":%v", *port), nil)
-	if err != nil {
-		panic("ListenAndServe: " + err.Error())
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("ListenAndServe: %v", err)
 	}
 }

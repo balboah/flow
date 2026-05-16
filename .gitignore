@@ -1,1 +1,8 @@
 *.sublime-*
+
+# Local test artifacts (browser-test-runner output, screenshots)
+.playwright-mcp/
+*.png
+
+# Built binaries
+/flow/flow

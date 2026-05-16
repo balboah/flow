@@ -4,12 +4,7 @@
 
 	for (var j = 0; j < 5; j++) {
 		for (var i = 0; i < 4; i++) {
-			sprites.push({
-				x: i * 20,
-				y: j * 20,
-				width: 20,
-				height: 20
-			});
+			sprites.push(i * 20, j * 20, 20, 20);
 		}
 	}
 
@@ -93,7 +88,7 @@
 			y = (curr.Y <= next.Y ? curr.Y : next.Y + 1) * grid;
 
 			part = this.parts[i];
-			part.setPosition(x, y);
+			part.setPosition({x: x, y: y});
 
 			if (i === 0) {
 				this.doHead(part, curr, next, x, y);
@@ -119,7 +114,7 @@
 	Worm.prototype.doHead = function(part, curr, next, x, y) {
 		var grid = this.flow.options.grid;
 
-		this.dot.setPosition(x + grid / 2, y + grid / 2);
+		this.dot.setPosition({x: x + grid / 2, y: y + grid / 2});
 		this.dot.setRadius(grid / 5);
 
 		if (curr.X === next.X) {

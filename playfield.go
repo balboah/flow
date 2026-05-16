@@ -18,9 +18,9 @@ type Lobby struct {
 	mu         sync.Mutex
 }
 
-var lobby Lobby = Lobby{Playfields: make(map[string]*Playfield)}
+var lobby = &Lobby{Playfields: make(map[string]*Playfield)}
 
-func (l Lobby) Playfield(key string) *Playfield {
+func (l *Lobby) Playfield(key string) *Playfield {
 	l.mu.Lock()
 	p, ok := l.Playfields[key]
 	if ok == false {

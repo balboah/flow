@@ -19,25 +19,25 @@ func TestWormMovability(t *testing.T) {
 
 	w.MoveLeft()
 	if d := w.Direction(); d != LEFT {
-		t.Errorf("Unexpected direction", d)
+		t.Errorf("Unexpected direction: %v", d)
 	}
 	testPos(Position{originalPos.X - 1, w.position.Y})
 
 	w.MoveRight()
 	if d := w.Direction(); d != RIGHT {
-		t.Errorf("Unexpected direction", d)
+		t.Errorf("Unexpected direction: %v", d)
 	}
 	testPos(Position{originalPos.X, w.position.Y})
 
 	w.MoveUp()
 	if d := w.Direction(); d != UP {
-		t.Errorf("Unexpected direction", d)
+		t.Errorf("Unexpected direction: %v", d)
 	}
 	testPos(Position{originalPos.X, originalPos.Y - 1})
 
 	w.MoveDown()
 	if d := w.Direction(); d != DOWN {
-		t.Errorf("Unexpected direction", d)
+		t.Errorf("Unexpected direction: %v", d)
 	}
 	testPos(Position{originalPos.X, originalPos.Y})
 }
