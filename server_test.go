@@ -1,8 +1,8 @@
 package flow
 
 import (
-	"golang.org/x/net/websocket"
 	"fmt"
+	"golang.org/x/net/websocket"
 	"log"
 	"net"
 	"net/http"

@@ -339,13 +339,13 @@ func (p *Playfield) announceJoin(m Movable, id Id) {
 	}
 	// Tell the new client who it is.
 	w.Outbox <- Packet{Command: "WELCOME", Payload: WelcomePayload{
-				Id:          id,
-				Name:        w.Name,
-				Token:       w.Token,
-				Dead:        w.killed,
-				DeathReason: w.deathReason,
-				Score:       w.Score,
-			}}
+		Id:          id,
+		Name:        w.Name,
+		Token:       w.Token,
+		Dead:        w.killed,
+		DeathReason: w.deathReason,
+		Score:       w.Score,
+	}}
 	// Seed the field with food on first join so a single player has something to chase.
 	for len(p.Foods) < FoodCount {
 		f := p.spawnFood()
@@ -386,13 +386,13 @@ func (p *Playfield) resyncWorm(w *Worm, id Id) {
 	}
 drained:
 	w.Outbox <- Packet{Command: "WELCOME", Payload: WelcomePayload{
-				Id:          id,
-				Name:        w.Name,
-				Token:       w.Token,
-				Dead:        w.killed,
-				DeathReason: w.deathReason,
-				Score:       w.Score,
-			}}
+		Id:          id,
+		Name:        w.Name,
+		Token:       w.Token,
+		Dead:        w.killed,
+		DeathReason: w.deathReason,
+		Score:       w.Score,
+	}}
 	for _, f := range p.Foods {
 		w.Outbox <- foodPacket(*f)
 	}
@@ -404,7 +404,6 @@ drained:
 	// GAMEOVER state travels in WELCOME above — no separate packet needed
 	// (and avoids racing the client's hideGameOver in the welcome handler).
 }
-
 
 // tick runs one game-loop step: advance every active worm, detect death from
 // walls / self / other snakes, then broadcast MOVE for survivors and GAMEOVER
