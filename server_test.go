@@ -76,7 +76,7 @@ func TestWormsServerConnect(t *testing.T) {
 	timer.Stop()
 
 	switch actualMsg.Command {
-	case "MOVE", "KILL", "HELLO":
+	case "MOVE", "KILL", "WELCOME", "FOOD", "SCORE", "EAT":
 	default:
 		t.Errorf("Unexpected reply: %+v", actualMsg)
 	}

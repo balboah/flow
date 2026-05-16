@@ -7,13 +7,21 @@
 </head>
 <body>
 
+	<div id="hud">
+		<label>Name <input id="name-input" type="text" maxlength="20" placeholder="loading..."></label>
+		<span class="own-score">Score: <b id="own-score">0</b></span>
+		<span class="scores" id="scores"></span>
+	</div>
+
 	<div id="playfield"></div>
 
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/kineticjs/5.2.0/kinetic.min.js"></script>
 
 	<script src="js/worm.js"></script>
+	<script src="js/food.js"></script>
 	<script src="js/field.js"></script>
+	<script src="js/hud.js"></script>
 	<script src="js/game.js"></script>
 	<script>game.init()</script>
 

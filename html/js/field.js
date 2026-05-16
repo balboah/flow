@@ -5,12 +5,17 @@
 
 		this.worms = {};
 		this.count = 0;
+		this.foods = {};
 
 		this.stage = new Kinetic.Stage({
 			container: 'playfield',
 			width: this.options.cols * this.options.grid,
 			height: this.options.rows * this.options.grid
 		});
+
+		// Food layer sits below worms so the head sprite always reads cleanly.
+		this.foodLayer = new Kinetic.Layer();
+		this.stage.add(this.foodLayer);
 
 		return this;
 	};
@@ -36,6 +41,21 @@
 			delete this.worms[id];
 			this.count--;
 			console.info('[Field] killed worm: %s - total worms: %s', id, this.count);
+		}
+	};
+
+	Field.prototype.addFood = function(payload) {
+		if (this.foods[payload.Id]) {
+			return;
+		}
+		this.foods[payload.Id] = new Food(payload, this);
+	};
+
+	Field.prototype.removeFood = function(id) {
+		var f = this.foods[id];
+		if (f) {
+			f.destroy();
+			delete this.foods[id];
 		}
 	};
 

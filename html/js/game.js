@@ -1,7 +1,16 @@
 (function(){
 
-	var $window = $(window),
-		$document = $(document);
+	var $document = $(document);
+
+	// Persist the chosen name across reloads.
+	var STORAGE_KEY = 'flow.name';
+	function loadStoredName() {
+		try { return localStorage.getItem(STORAGE_KEY) || ''; }
+		catch (e) { return ''; }
+	}
+	function storeName(name) {
+		try { localStorage.setItem(STORAGE_KEY, name); } catch (e) {}
+	}
 
 	var game = window.game = {
 
@@ -9,31 +18,38 @@
 
 		init: function(){
 			game.field = new Field();
+			game.hud = new HUD(game);
 			game.connect();
 		},
 
 		// Opens a WebSocket connection to the server
 		connect: function(){
-			var ws = game.ws = new WebSocket('ws://' + document.location.host + '/worms');
+			var proto = (document.location.protocol === 'https:') ? 'wss:' : 'ws:';
+			var ws = game.ws = new WebSocket(proto + '//' + document.location.host + '/worms');
 
-			// Log errors
 			ws.onerror = function(error){
 				console.error('WebSocket Error', error);
 			};
 
-			// Log messages from the server
 			ws.onmessage = function(ev){
 				var packet = JSON.parse(ev.data);
-				game.commands[packet.Command.toLowerCase()](packet.Payload);
+				var handler = game.commands[packet.Command.toLowerCase()];
+				if (handler) {
+					handler(packet.Payload);
+				} else {
+					console.warn('Unhandled packet', packet);
+				}
 			};
 
-			// When the connection is open, send some data to the server
 			ws.onopen = function(){
-				game.send({
-					Command: "HELLO"
-				});
+				var name = loadStoredName();
+				game.send({Command: 'HELLO', Payload: name});
 
 				$document.keydown(function(ev){
+					// Skip when typing in the name input.
+					if (ev.target && ev.target.tagName === 'INPUT') {
+						return;
+					}
 					// Control the worm: arrow keys
 					if ([37, 38, 39, 40].indexOf(ev.keyCode) > -1) {
 						ev.preventDefault();
@@ -45,10 +61,7 @@
 							40: 'DOWN'
 						}[ev.keyCode];
 
-						game.send({
-							Command: "MOVE",
-							Payload: dir
-						});
+						game.send({Command: 'MOVE', Payload: dir});
 					}
 					// Enable/Disable the grid: `g`
 					if (ev.keyCode === 71) {
@@ -67,12 +80,34 @@
 		// Game commands received from server
 		commands: {
 
+			welcome: function(payload) {
+				game.hud.welcome(payload);
+				storeName(payload.Name);
+			},
+
 			move: function(payload) {
 				game.field.getWorm(payload.Id).move(payload.Positions);
 			},
 
 			kill: function(payload) {
-				game.field.kill(payload);
+				var id = parseInt(payload, 10);
+				game.field.kill(id);
+				game.hud.removeWorm(id);
+			},
+
+			food: function(payload) {
+				game.field.addFood(payload);
+			},
+
+			eat: function(payload) {
+				game.field.removeFood(payload.FoodId);
+			},
+
+			score: function(payload) {
+				game.hud.updateScore(payload);
+				if (game.hud.ownName) {
+					storeName(game.hud.ownName);
+				}
 			}
 
 		}

@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	Boundary = 49 // The outer boundary of a playfield
-	WormSize = 10 // Starting length of the worm
+	Boundary       = 49 // The outer boundary of a playfield
+	WormSize       = 3  // Starting length of the worm
+	GrowthInterval = 30 // Points between each tail-growth step
 )
 
 type Length uint
@@ -46,6 +47,12 @@ type Worm struct {
 
 	// Packets to be sent to the client controlling the worm
 	Outbox chan Packet
+
+	// Player-visible state
+	Name            string
+	Score           int
+	lastGrowthScore int
+	pendingGrowth   int
 }
 
 func NewWorm() *Worm {
@@ -56,12 +63,17 @@ func NewWorm() *Worm {
 	return &Worm{
 		blocks:    blocks,
 		direction: Unknown,
-		Outbox:    make(chan Packet, 5),
+		Outbox:    make(chan Packet, 16),
 	}
 }
 
 func (w *Worm) Positions() []Position {
 	return w.blocks
+}
+
+// Head is the leading block — what collides with food.
+func (w *Worm) Head() Position {
+	return w.blocks[0]
 }
 
 func (w *Worm) Kill() {
@@ -76,9 +88,24 @@ func (w *Worm) Channel() chan<- Packet {
 	return w.Outbox
 }
 
-// Process incoming packets
+// AddScore credits points and queues growth that crosses the threshold.
+// Returns the number of segments queued by this call.
+func (w *Worm) AddScore(points int) int {
+	w.Score += points
+	grown := 0
+	for w.Score-w.lastGrowthScore >= GrowthInterval {
+		w.lastGrowthScore += GrowthInterval
+		w.pendingGrowth++
+		grown++
+	}
+	return grown
+}
+
+// Communicate handles direction-change messages from the client.
+// Name-bearing messages (HELLO with Name, RENAME) are handled at the server
+// layer via the playfield's Rename channel so all worm-state writes happen
+// on a single goroutine.
 func (w *Worm) Communicate(message Packet) error {
-	// Direction changes is the only thing we expect right now
 	switch message.Command {
 	case "MOVE":
 		payload, ok := message.Payload.(string)
@@ -103,9 +130,8 @@ func (w *Worm) Communicate(message Packet) error {
 				w.direction = Right
 			}
 		}
-	case "HELLO":
 	default:
-		return errors.New(fmt.Sprintf("Unknown command: %s", message.Command))
+		return fmt.Errorf("Unknown command: %s", message.Command)
 	}
 	return nil
 }
@@ -126,7 +152,6 @@ func (w *Worm) Direction() Direction {
 }
 
 func (w *Worm) Move(d Direction) {
-	// Then update our new position
 	w.direction = d
 	pos := w.blocks[0]
 	switch d {
@@ -147,6 +172,12 @@ func (w *Worm) Move(d Direction) {
 			pos.Y++
 		}
 	}
-	// Push all blocks to follow the preceding, moving the tail of the worm
-	w.blocks = append([]Position{pos}, w.blocks[0:len(w.blocks)-1]...)
+	// Push all blocks to follow the preceding. If growth is pending we keep
+	// the previous tail block, lengthening the worm by one.
+	if w.pendingGrowth > 0 {
+		w.blocks = append([]Position{pos}, w.blocks...)
+		w.pendingGrowth--
+	} else {
+		w.blocks = append([]Position{pos}, w.blocks[0:len(w.blocks)-1]...)
+	}
 }

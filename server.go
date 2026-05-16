@@ -34,9 +34,16 @@ func WormsServer(ws *websocket.Conn) {
 				break
 			}
 			log.Print("Got data on worms server", message)
-			if err := worm.Communicate(message); err != nil {
-				log.Println(err)
-				break
+			switch message.Command {
+			case "HELLO", "RENAME":
+				if name, ok := message.Payload.(string); ok && name != "" {
+					playfield.Rename <- RenameRequest{Worm: worm, Name: name}
+				}
+			default:
+				if err := worm.Communicate(message); err != nil {
+					log.Println(err)
+					break
+				}
 			}
 		}
 	}()
