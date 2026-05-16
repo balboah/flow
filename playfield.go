@@ -251,9 +251,16 @@ func (p *Playfield) safeSpawn() Position {
 	return Position{X: rand.IntN(Boundary + 1), Y: rand.IntN(Boundary + 1)}
 }
 
+// MinPlayers is the total player count (humans + bots) the playfield tops
+// itself up to whenever at least one human is connected. With this set to 4,
+// a lone human gets 3 bot rivals, three humans get 1 bot, and four or more
+// humans get no bots at all.
+const MinPlayers = 4
+
 // aiTargetCount returns how many AI bots the playfield should currently host
-// based on how many human worms are connected. The intent is to give a lone
-// human some rivals without overwhelming a real multiplayer game.
+// based on how many human worms are connected. With no humans there are no
+// bots (no point burning ticks). With humans present, top up to MinPlayers
+// so the field always feels populated.
 func (p *Playfield) aiTargetCount() int {
 	humans := 0
 	for m := range p.Movables {
@@ -261,14 +268,14 @@ func (p *Playfield) aiTargetCount() int {
 			humans++
 		}
 	}
-	switch humans {
-	case 0:
-		return 0
-	case 1:
-		return 2
-	default:
+	if humans == 0 {
 		return 0
 	}
+	target := MinPlayers - humans
+	if target < 0 {
+		return 0
+	}
+	return target
 }
 
 // reconcileAIs nudges the AI roster toward aiTargetCount. Bots spawn with a
