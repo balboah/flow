@@ -22,6 +22,12 @@ type AIPersonality struct {
 	// HesitationRate is the chance per tick of picking the second-best
 	// move instead of the best — the "whoops, mistimed" effect.
 	HesitationRate float64
+	// MistakeRate is the per-tick probability that the bot temporarily
+	// doesn't see opponent bodies as hazards. The chosen direction can
+	// then walk into a snake and die — the bot looks human, not infallible.
+	// Self-collision and 180° reversals stay filtered out (those would
+	// be unforced errors no human would make).
+	MistakeRate float64
 }
 
 // newPersonality draws a fresh persona from a random seed. The seed becomes
@@ -36,6 +42,7 @@ func newPersonality() AIPersonality {
 		Inertia:        0.5 + r.Float64()*2.5,   // 0.5 – 3.0
 		CenterPull:     r.Float64() * 0.5,       // 0.0 – 0.5
 		HesitationRate: 0.03 + r.Float64()*0.07, // 3% – 10%
+		MistakeRate:    0.02 + r.Float64()*0.05, // 2% – 7%
 	}
 }
 
@@ -43,14 +50,24 @@ func newPersonality() AIPersonality {
 // picks the best — with a small chance of choosing the runner-up so two
 // bots in similar spots don't always make identical decisions.
 func pickAIDirection(w *Worm, p *Playfield) Direction {
-	candidates := safeDirections(w, p)
-	if len(candidates) == 0 {
-		return w.direction
-	}
-
 	personality := w.personality
 	if personality.Name == "" {
 		personality = newPersonality()
+	}
+
+	candidates := safeDirections(w, p)
+	// Occasionally the bot "doesn't see" an opponent body and may pick a
+	// direction that walks into one — that's the human-like mistake we
+	// want. Own-body and 180° reversals are still filtered, so the bot
+	// never makes an unforced error.
+	if rand.Float64() < personality.MistakeRate {
+		risky := bodyOblivousDirections(w)
+		if len(risky) > 0 {
+			candidates = risky
+		}
+	}
+	if len(candidates) == 0 {
+		return w.direction
 	}
 
 	target, hasTarget := nearestFood(w.Head(), p)
@@ -96,6 +113,33 @@ func pickAIDirection(w *Worm, p *Playfield) Direction {
 		pick = 1
 	}
 	return scores[order[pick]].dir
+}
+
+// bodyOblivousDirections returns directions that filter out only the
+// "unforced error" cases: own body and 180° reversal. Opponent bodies and
+// heads are NOT filtered — used when the bot is having a brain-fart so it
+// can plausibly walk into another snake.
+func bodyOblivousDirections(w *Worm) []Direction {
+	head := w.Head()
+	blocked := map[Position]struct{}{}
+	for i, b := range w.blocks {
+		if w.pendingGrowth == 0 && i == len(w.blocks)-1 {
+			continue
+		}
+		blocked[b] = struct{}{}
+	}
+	out := make([]Direction, 0, 4)
+	for _, d := range []Direction{Up, Down, Left, Right} {
+		if opposite(d) == w.direction && w.direction != Unknown {
+			continue
+		}
+		next := wrap(step(head, d))
+		if _, hit := blocked[next]; hit {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 // safeDirections returns directions whose next cell would not kill us. Own
