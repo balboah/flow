@@ -1,0 +1,24 @@
+# Keep the build context lean — only Go sources and the static web assets.
+.git
+.gitignore
+.jj
+.claude
+.playwright-mcp
+*.png
+*.md
+*_test.go
+Dockerfile
+.dockerignore
+
+# Mac noise
+.DS_Store
+
+# Editor / IDE
+*.swp
+*.swo
+.idea
+.vscode
+
+# Source-only artifacts we don't ship
+sprites/
+.travis.yml
