@@ -186,8 +186,30 @@
 		this.startPx = startPx;
 		this.endPx = endPx;
 		this.visualPx = startPx.map(function(p){ return {x: p.x, y: p.y}; });
-		this.tweenStart = performance.now();
-		this.tweenDur = TICK_MS;
+
+		// Adapt tween duration to the actual cadence at which MOVE packets
+		// arrive. The nominal server tick is TICK_MS, but goroutine
+		// scheduling + network jitter shift each arrival by ±10-30ms. A
+		// fixed tweenDur = TICK_MS makes the worm reach endPx slightly
+		// before/after each next MOVE — perceived as a "fast-slow-fast"
+		// motion pattern. An EMA over recent observed intervals lets each
+		// tween last about as long as the next MOVE takes to arrive (in
+		// expectation), so the worm's visual speed stays steady even
+		// under tick jitter.
+		var nowMs = performance.now();
+		if (this.lastMoveAt != null) {
+			var observedDt = nowMs - this.lastMoveAt;
+			// Outlier guard: drop intervals outside a plausible band so
+			// a reconnect / tab-resume catch-up doesn't poison the EMA.
+			if (observedDt > 80 && observedDt < 500) {
+				if (this.smoothedTickMs == null) this.smoothedTickMs = observedDt;
+				else this.smoothedTickMs = this.smoothedTickMs * 0.7 + observedDt * 0.3;
+			}
+		}
+		this.lastMoveAt = nowMs;
+		this.tweenStart = nowMs;
+		this.tweenDur = this.smoothedTickMs || TICK_MS;
+
 		this.targetCells = positions.map(function(c){ return {X: c.X, Y: c.Y}; });
 		this.continuousCells = newContinuous;
 
