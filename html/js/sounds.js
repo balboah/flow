@@ -204,11 +204,52 @@
 		}
 	}
 
+	function safeSuspend() {
+		if (!ctx || !ctx.suspend || ctx.state === 'closed') return;
+		ctx.suspend();
+	}
+	function safeResume() {
+		if (!ctx || !ctx.resume || ctx.state === 'closed') return;
+		ctx.resume();
+	}
+
+	// Pause music while the tab is hidden. setTimeout keeps firing on iOS
+	// Safari (sometimes only somewhat throttled), and suspending the
+	// AudioContext stops the audio thread entirely — together this saves
+	// real CPU while the user is away. visibilityPaused tracks the pause
+	// so we only resume music we ourselves stopped (not what the user
+	// disabled). We never resume the context while audio is disabled — that
+	// would wake the audio thread the user explicitly turned off.
+	var visibilityPaused = false;
+	if (typeof document !== 'undefined') {
+		document.addEventListener('visibilitychange', function() {
+			if (document.hidden) {
+				if (!musicStopped) {
+					stopMusic();
+					visibilityPaused = true;
+				}
+				safeSuspend();
+			} else if (enabled) {
+				safeResume();
+				if (visibilityPaused) {
+					visibilityPaused = false;
+					startMusic();
+				}
+			}
+		});
+	}
+
 	window.sounds = {
 		init: ensureCtx,
 		setEnabled: function(on){
 			enabled = !!on;
-			if (!enabled) stopMusic();
+			if (!enabled) {
+				stopMusic();
+				// Suspend the audio thread so disabling actually goes
+				// quiet — `stopMusic` only clears the loop, the context
+				// itself stays awake otherwise.
+				safeSuspend();
+			}
 		},
 
 		// Quick high blip for picking up a carrot.

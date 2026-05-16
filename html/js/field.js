@@ -37,6 +37,8 @@
 		this.markerLayer = new Kinetic.Layer();
 		this.stage.add(this.markerLayer);
 
+		this._perf = createPerfOverlay();
+
 		var self = this;
 		this.fit();
 		$(window).on('resize.flow-field', function(){ self.fit(); });
@@ -44,11 +46,64 @@
 		return this;
 	};
 
+	// createPerfOverlay shows FPS / avg+max frame-time in the corner when
+	// the page is loaded with ?perf=1. Used to compare rendering cost
+	// before/after optimisations on actual devices (iPhone in particular).
+	function createPerfOverlay() {
+		if (typeof location === 'undefined' || !/[?&]perf=1\b/.test(location.search)) {
+			return null;
+		}
+		var el = document.createElement('div');
+		el.style.cssText = [
+			'position:fixed', 'top:42px', 'right:8px', 'z-index:30',
+			'background:rgba(0,0,0,0.6)', 'color:#fff',
+			'font:11px/1.25 ui-monospace,Menlo,monospace',
+			'padding:4px 7px', 'border-radius:3px',
+			'pointer-events:none', 'white-space:pre'
+		].join(';');
+		document.body.appendChild(el);
+
+		var deltas = new Array(120);
+		var head = 0, count = 0;
+		var lastT = 0;
+		var lastRender = 0;
+		return {
+			sample: function(now) {
+				if (lastT > 0) {
+					deltas[head] = now - lastT;
+					head = (head + 1) % deltas.length;
+					if (count < deltas.length) count++;
+				}
+				lastT = now;
+				if (now - lastRender < 250) return;
+				lastRender = now;
+				if (count === 0) return;
+				var sum = 0, max = 0;
+				for (var i = 0; i < count; i++) {
+					var d = deltas[i];
+					sum += d;
+					if (d > max) max = d;
+				}
+				var avg = sum / count;
+				el.textContent =
+					'FPS ' + (1000 / avg).toFixed(0) +
+					'\navg ' + avg.toFixed(1) + 'ms' +
+					'\nmax ' + max.toFixed(1) + 'ms';
+			}
+		};
+	}
+
 	// buildGround sprinkles deterministic dots across the field and replicates
 	// the same pattern in a 3×3 tile arrangement around the canonical field.
 	// This way when the camera pans past an edge in camera-follow mode there
 	// is always content under the player — the world reads as continuous
 	// instead of suddenly hitting a "void".
+	//
+	// The dots are static, so we rasterise the whole tile into one offscreen
+	// canvas once and stamp it 9 times as Kinetic.Image. The previous version
+	// added ~3,300 individual Kinetic.Circle nodes which got re-stroked on
+	// every stage.batchDraw() (i.e. every camera-mode rAF) — the dominant
+	// cost on mobile.
 	Field.prototype.buildGround = function() {
 		var fieldPx = this.logicalSize;
 		// Mulberry32 PRNG. Seeded so the dot field is identical across
@@ -63,10 +118,6 @@
 			return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 		};
 
-		// Build the canonical dot list once, then replicate at the 9 tile
-		// offsets so every tile shows the same pattern. (Identical pattern is
-		// intentional — the world wraps in cell coords, so tile copies are
-		// the actual contents of the wrapped neighbouring field.)
 		var entries = [];
 		for (var b = 0; b < 10; b++) {
 			entries.push({
@@ -92,16 +143,46 @@
 				opacity: 0.45
 			});
 		}
+
+		// Rasterise once into a tile-sized offscreen canvas. Entries are
+		// also drawn at each 8-neighbour offset so the wrap-bleed (big
+		// blobs near a tile edge spilling into the adjacent tile) is baked
+		// into the cached image — visually identical to the prior 3×3
+		// node replication, just paid once at startup instead of every
+		// frame.
+		var cache = document.createElement('canvas');
+		cache.width = fieldPx;
+		cache.height = fieldPx;
+		var cctx = cache.getContext('2d');
+		for (var e = 0; e < entries.length; e++) {
+			var en = entries[e];
+			cctx.fillStyle = en.fill;
+			cctx.globalAlpha = en.opacity;
+			for (var ox = -1; ox <= 1; ox++) {
+				for (var oy = -1; oy <= 1; oy++) {
+					var cx = en.x + ox * fieldPx;
+					var cy = en.y + oy * fieldPx;
+					// Cheap reject: skip offsets that can't intersect
+					// the tile rect. Canvas would clip anyway, but skipping
+					// avoids the arc-fill setup cost.
+					if (cx + en.r < 0 || cx - en.r > fieldPx ||
+						cy + en.r < 0 || cy - en.r > fieldPx) continue;
+					cctx.beginPath();
+					cctx.arc(cx, cy, en.r, 0, Math.PI * 2);
+					cctx.fill();
+				}
+			}
+		}
+		cctx.globalAlpha = 1;
+
 		for (var tx = -1; tx <= 1; tx++) {
 			for (var ty = -1; ty <= 1; ty++) {
-				var ox = tx * fieldPx, oy = ty * fieldPx;
-				for (var e = 0; e < entries.length; e++) {
-					var en = entries[e];
-					this.groundLayer.add(new Kinetic.Circle({
-						x: en.x + ox, y: en.y + oy,
-						radius: en.r, fill: en.fill, opacity: en.opacity
-					}));
-				}
+				this.groundLayer.add(new Kinetic.Image({
+					x: tx * fieldPx, y: ty * fieldPx,
+					width: fieldPx, height: fieldPx,
+					image: cache,
+					listening: false
+				}));
 			}
 		}
 	};
@@ -183,15 +264,24 @@
 		this.stage.batchDraw();
 	};
 
+	// MARKER_THROTTLE_MS caps how often the off-screen food markers
+	// recompute from inside the rAF loop. They follow the camera, so 50ms
+	// (~20Hz) is well below the threshold where the lag is noticeable but
+	// avoids redoing the per-food / 9-tile-offset math 60 times per second.
+	var MARKER_THROTTLE_MS = 50;
+
 	// requestAnimation kicks a single rAF loop that ticks every worm's tween,
 	// recenters the camera on the local player's interpolated head, and
 	// refreshes the off-screen food markers. The loop ends as soon as no
-	// worm reports an active tween.
+	// worm reports an active tween. Browsers already pause rAF when the tab
+	// is hidden — worm.tick() clamps t to 1, so on visibility resume the
+	// next rAF cleanly snaps sprites to their tween end and the loop exits.
 	Field.prototype.requestAnimation = function() {
 		if (this.rafScheduled) return;
 		this.rafScheduled = true;
 		var self = this;
 		var loop = function(now) {
+			if (self._perf) self._perf.sample(now);
 			var anyActive = false;
 			var ownId = (window.game && game.hud) ? game.hud.ownId : null;
 			var grid = self.options.grid;
@@ -209,7 +299,10 @@
 					);
 				}
 			}
-			self.updateMarkers();
+			if (now - (self._lastMarkerTime || 0) >= MARKER_THROTTLE_MS) {
+				self._lastMarkerTime = now;
+				self.updateMarkers();
+			}
 			if (anyActive) {
 				requestAnimationFrame(loop);
 			} else {
