@@ -28,9 +28,47 @@
 			game.field = new Field();
 			game.hud = new HUD(game);
 			game.bindGameOver();
+			game.bindMusicPlayer();
 			// Always confirm the alias on page load. Pre-fill with the last
 			// one used so a quick refresh is a single Enter press.
 			game.showWelcome(loadStored(STORAGE_NAME));
+		},
+
+		// Wires the top-bar prev / play-pause / next buttons to the
+		// `sounds` music API. The audio context is started by the click
+		// itself, so users can toggle music from this control alone (no
+		// dependency on the welcome jingle path).
+		bindMusicPlayer: function(){
+			if (!window.sounds) return;
+			var prev   = document.getElementById('music-prev');
+			var next   = document.getElementById('music-next');
+			var toggle = document.getElementById('music-toggle');
+			var label  = document.getElementById('music-track');
+			if (!prev || !next || !toggle || !label) return;
+
+			prev.addEventListener('click', function(ev){
+				ev.preventDefault();
+				sounds.prevTrack();
+			});
+			next.addEventListener('click', function(ev){
+				ev.preventDefault();
+				sounds.nextTrack();
+			});
+			toggle.addEventListener('click', function(ev){
+				ev.preventDefault();
+				sounds.toggleMusic();
+			});
+
+			function render() {
+				var t = sounds.getCurrentTrack();
+				label.textContent = t.name;
+				var playing = sounds.isPlaying();
+				toggle.textContent = playing ? '⏸' : '▶';
+				toggle.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+				toggle.title = playing ? 'Pause' : 'Play';
+			}
+			sounds.onStateChange(render);
+			render();
 		},
 
 		showWelcome: function(prefill){

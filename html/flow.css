@@ -75,6 +75,57 @@ html, body {
 		outline: 1px solid #ffd54a;
 	}
 
+	#hud .music-player {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin-left: auto; /* pushes player to the far right of the HUD */
+		background: #1a1c2a;
+		border: 1px solid #2c2f48;
+		border-radius: 14px;
+		padding: 2px 4px 2px 4px;
+	}
+		#hud .music-player .mp-btn {
+			background: transparent;
+			color: #cdd0e0;
+			border: 0;
+			padding: 2px 6px;
+			font-size: 14px;
+			line-height: 1;
+			cursor: pointer;
+			border-radius: 10px;
+			min-width: 22px;
+		}
+			#hud .music-player .mp-btn:hover {
+				background: #2c2f48;
+				color: #fff;
+			}
+			#hud .music-player .mp-btn:active {
+				background: #3a3e60;
+			}
+		#hud .music-player .mp-track {
+			color: #d8dbe9;
+			font-size: 12px;
+			padding: 0 8px 0 4px;
+			white-space: nowrap;
+			max-width: 160px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			letter-spacing: 0.02em;
+		}
+
+	@media (max-width: 600px) {
+		#hud .music-player .mp-track {
+			max-width: 110px;
+			font-size: 11px;
+		}
+		#hud .music-player .mp-btn {
+			font-size: 16px;
+			padding: 4px 8px;
+			min-width: 28px;
+		}
+	}
+
 #playfield {
 	position: absolute;
 	top: var(--hud-height, 40px);
