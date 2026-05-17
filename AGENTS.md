@@ -23,11 +23,17 @@ Use the Makefile — it documents the canonical invocations.
 | Target        | What                                              |
 |---------------|---------------------------------------------------|
 | `make test`   | Full Go test suite (no test cache).               |
-| `make run`    | Local dev server on `:5000` (override `PORT=`).   |
+| `make run`    | Local dev server (stable per-CWD port; override `PORT=`). |
+| `make port`   | Print the port `make run` would pick here.        |
 | `make build`  | Compile the binary locally.                       |
 | `make fmt`    | `go fmt ./...`                                    |
 | `make vet`    | `go vet ./...`                                    |
 | `make deploy` | Deploy the current working copy to Cloud Run.     |
+
+`make run`'s default port is derived from a SHA-1 of `$(CURDIR)` mapped into
+`5000..5999`. The mapping is stable per checkout, so two jj workspaces of
+this repo get different ports and can run dev servers concurrently. Pass
+`PORT=<n>` to override.
 
 ## Production hosting
 
