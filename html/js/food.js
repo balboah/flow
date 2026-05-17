@@ -1,9 +1,10 @@
 (function(){
 
 	var FOOD_EMOJI = {
-		apple:  '🍎',
-		carrot: '🥕',
-		bomb:   '💣'
+		apple:    '🍎',
+		carrot:   '🥕',
+		broccoli: '🥦',
+		bomb:     '💣'
 	};
 
 	// Pre-render each emoji into an offscreen canvas. We paint the glyph

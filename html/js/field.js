@@ -400,11 +400,14 @@
 			var t = Math.min(tX, tY);
 			if (!isFinite(t) || t < 0) continue;
 
-			// Subtle palette — markers should hint, not shout.
+			// Subtle palette — markers should hint, not shout. Broccoli is
+			// the jackpot, so its marker gets a brighter gold to draw
+			// the eye past the apples and carrots.
 			var color, opacity;
-			if (f.type === 'bomb')        { color = '#5a5e72'; opacity = 0.35; }
-			else if (f.type === 'apple')  { color = '#c45c5c'; opacity = 0.40; }
-			else                          { color = '#c98a4a'; opacity = 0.40; }
+			if (f.type === 'bomb')          { color = '#5a5e72'; opacity = 0.35; }
+			else if (f.type === 'apple')    { color = '#c45c5c'; opacity = 0.40; }
+			else if (f.type === 'broccoli') { color = '#ffd44d'; opacity = 0.65; }
+			else                            { color = '#c98a4a'; opacity = 0.40; }
 
 			this.markers[id] = {
 				x: cx + dx * t,
@@ -446,15 +449,20 @@
 			}
 		}
 
-		// 2. Foods — 9 copies per food.
+		// 2. Foods — 9 copies per food. Broccoli is the jackpot: each copy
+		//    gets a sparkle overlay so the player spots it instantly.
 		var foodIds = Object.keys(this.foods);
 		for (var fi = 0; fi < foodIds.length; fi++) {
 			var f = this.foods[foodIds[fi]];
 			var fx = f.x * grid;
 			var fy = f.y * grid;
+			var isJackpot = f.type === 'broccoli';
 			for (var g = 0; g < GHOST_OFFSETS.length; g++) {
 				var off = GHOST_OFFSETS[g];
-				ctx.drawImage(f.bitmap, fx + off[0] * fieldPx, fy + off[1] * fieldPx);
+				var ox = fx + off[0] * fieldPx;
+				var oy = fy + off[1] * fieldPx;
+				ctx.drawImage(f.bitmap, ox, oy);
+				if (isJackpot) drawBroccoliSparkle(ctx, ox, oy, grid, now);
 			}
 		}
 
@@ -537,6 +545,43 @@
 			ctx.globalAlpha = 1;
 		}
 	};
+
+	// drawBroccoliSparkle paints three drifting glints over a broccoli tile.
+	// The glints orbit the centre with sinusoidal pulse so the player can
+	// tell at a glance that this food is the jackpot — bots prefer it
+	// (server-side) so humans need to recognise and race for it.
+	function drawBroccoliSparkle(ctx, x, y, size, now) {
+		var t = now / 600;
+		var cx = x + size / 2;
+		var cy = y + size / 2;
+		// Three glints with different phases and orbit radii. Y uses a
+		// faster frequency so the motion looks orbital, not circular.
+		var orbits = [
+			[0.0, 0.34],
+			[2.1, 0.40],
+			[4.2, 0.30]
+		];
+		ctx.save();
+		for (var i = 0; i < orbits.length; i++) {
+			var a = t + orbits[i][0];
+			var r = orbits[i][1] * size;
+			var sx = cx + Math.cos(a) * r;
+			var sy = cy + Math.sin(a * 1.3) * r;
+			var pulse = 0.5 + 0.5 * Math.sin(a * 2.7);
+			var rad = (0.7 + 1.1 * pulse) * (size / 20);
+			ctx.globalAlpha = 0.35 + 0.55 * pulse;
+			ctx.fillStyle = '#fff4b0';   // warm halo
+			ctx.beginPath();
+			ctx.arc(sx, sy, rad * 1.9, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.globalAlpha = Math.min(1, 0.55 + 0.45 * pulse);
+			ctx.fillStyle = '#ffffff';   // bright core
+			ctx.beginPath();
+			ctx.arc(sx, sy, rad * 0.7, 0, Math.PI * 2);
+			ctx.fill();
+		}
+		ctx.restore();
+	}
 
 	// createPerfOverlay shows FPS / avg+max frame-time in the corner when
 	// the page is loaded with ?perf=1. Used to compare rendering cost

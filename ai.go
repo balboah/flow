@@ -235,7 +235,8 @@ func step(p Position, d Direction) Position {
 
 func nearestFood(from Position, p *Playfield) (Position, bool) {
 	var best Position
-	bestDist := -1
+	bestEffective := 0
+	found := false
 	for _, f := range p.Foods {
 		if f.Type == Bomb {
 			// Bots don't deliberately chase bombs (those are hazards, not
@@ -244,13 +245,18 @@ func nearestFood(from Position, p *Playfield) (Position, bool) {
 			// any other unoccupied cell from a pathing standpoint.
 			continue
 		}
-		d := manhattan(from, f.Position)
-		if bestDist < 0 || d < bestDist {
-			bestDist = d
+		// Effective distance lets us pull bots toward high-value food
+		// without ignoring something close. Broccoli's attraction bonus
+		// (see AIFoodAttraction) lets bots prefer it over a nearby apple
+		// when it's within a handful of cells of equal distance.
+		eff := manhattan(from, f.Position) - AIFoodAttraction[f.Type]
+		if !found || eff < bestEffective {
+			bestEffective = eff
 			best = f.Position
+			found = true
 		}
 	}
-	return best, bestDist >= 0
+	return best, found
 }
 
 // manhattan is wrap-aware: the field is a torus so distance along each axis
