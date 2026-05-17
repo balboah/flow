@@ -70,57 +70,138 @@
 
 	// --- Background music --------------------------------------------------
 	//
-	// A 4-chord, 4-bar loop in C major. Melody on a square-wave channel and a
-	// triangle-wave bass — about as 8-bit as we get without writing a full
-	// tracker. Notes are scheduled on the AudioContext clock, one bar at a
-	// time, with a setTimeout that fires slightly before each loop ends to
-	// queue the next one. This keeps timing rock-steady regardless of main
-	// thread jitter.
+	// 16-bar loop in A minor with a jazz-influenced chord progression
+	// (Am7 Dm7 G7 Cmaj7 | Fmaj7 Bm7b5 E7 Am, restated and resolved). Three
+	// voices: a "sax"-style lead (filtered sawtooth + vibrato), a walking
+	// triangle bass, and a soft sustained chord pad. Aimed at a retro
+	// space-trader vibe: catchy enough to recognise, sparse enough to leave
+	// in the background for long sessions.
 	//
-	// Beat duration tuned to feel upbeat without becoming frenetic.
-	var BEAT = 0.18;            // seconds per beat
+	// Notes are scheduled on the AudioContext clock a loop at a time, with a
+	// setTimeout that fires slightly before each loop ends to queue the
+	// next one. Keeps timing rock-steady regardless of main thread jitter.
+	var BEAT = 0.22;            // seconds per beat
 	var BAR = BEAT * 4;
-	var LOOP_BARS = 8;
+	var LOOP_BARS = 16;
 	var LOOP = LOOP_BARS * BAR;
 
-	// Melody: [freqHz, beats]. Sum of beats per bar = 4 — 8-bar phrase keeps
-	// the loop from feeling too short. Built on a I–V–vi–IV opening followed
-	// by a higher restate to give the tune somewhere to go before resolving.
+	// Lead melody: [freqHz, beats]. freq=0 is a rest. Sum of beats per bar
+	// = 4. Built as four 4-bar phrases that stack: statement, answer,
+	// climb to a higher restatement, and descending resolution + turnaround.
 	var MELODY = [
-		// Bar 1 — C: rising arpeggio
-		[523, 1], [659, 1], [784, 2],
-		// Bar 2 — G: continues the climb
-		[587, 1], [698, 1], [988, 2],
-		// Bar 3 — Am: gentle descent
-		[659, 1], [523, 1], [440, 2],
-		// Bar 4 — F: bounce back up
-		[349, 1], [440, 1], [523, 2],
-		// Bar 5 — C: peak
-		[784, 2], [659, 1], [523, 1],
-		// Bar 6 — G: stay high
-		[988, 2], [784, 1], [587, 1],
-		// Bar 7 — Am: bounce
-		[659, 1], [523, 1], [659, 1], [440, 1],
-		// Bar 8 — F → C cadence
-		[698, 1], [659, 1], [587, 1], [523, 1]
+		// Phrase 1 (bars 1-4): Am7 - Dm7 - G7 - Cmaj7
+		[0, 1], [659, 2], [523, 1],            // rest, E5, C5
+		[587, 2], [698, 1], [659, 1],          // D5, F5, E5
+		[587, 4],                              // D5 held
+		[0, 1], [523, 1], [659, 2],            // rest, C5, E5
+		// Phrase 2 (bars 5-8): Fmaj7 - Bm7b5 - E7 - Am
+		[0, 1], [440, 1], [523, 2],            // rest, A4, C5
+		[698, 2], [587, 2],                    // F5, D5
+		[0, 1], [415, 1], [494, 2],            // rest, G#4, B4
+		[440, 4],                              // A4 held — phrase rest
+		// Phrase 3 (bars 9-12): higher restatement, more active
+		[659, 1], [880, 1], [1047, 2],         // E5, A5, C6
+		[880, 1], [698, 1], [587, 2],          // A5, F5, D5
+		[784, 1], [988, 1], [1175, 2],         // G5, B5, D6
+		[1047, 4],                             // C6 held — peak
+		// Phrase 4 (bars 13-16): descending resolution + turnaround
+		[880, 1], [784, 1], [698, 2],          // A5, G5, F5
+		[659, 1], [587, 1], [494, 2],          // E5, D5, B4
+		[440, 4],                              // A4 held — landing
+		[0, 2], [494, 1], [659, 1]             // rest, B4, E5 (lifts back to the top)
 	];
 
-	// One bass note per bar — the chord root.
-	var BASS = [131, 196, 220, 175, 131, 196, 220, 175]; // C3 G3 A3 F3 ×2
+	// Walking bass: [freqHz, beats]. Two half-note moves per bar (root then
+	// fifth/approach) for a steady but breathing groove; bars 15-16 walk
+	// chromatically to set up the loop turnaround.
+	var BASS = [
+		// Bars 1-8
+		[110, 2], [165, 2],            // Am:     A2  → E3
+		[147, 2], [110, 2],            // Dm:     D3  → A2
+		[ 98, 2], [147, 2],            // G7:     G2  → D3
+		[131, 2], [196, 2],            // Cmaj7:  C3  → G3
+		[ 87, 2], [131, 2],            // Fmaj7:  F2  → C3
+		[123, 2], [175, 2],            // Bm7b5:  B2  → F3
+		[ 82, 2], [123, 2],            // E7:     E2  → B2
+		[110, 2], [ 82, 2],            // Am   → E2 (lead-in to recap)
+		// Bars 9-16. Second half mirrors the first up to bar 13, then skips
+		// the Bm7b5 to land on E7 a bar earlier so bars 15-16 (Am, E7) can
+		// act as the turnaround back to Am at bar 1.
+		[110, 2], [165, 2],            // Am
+		[147, 2], [110, 2],            // Dm
+		[ 98, 2], [147, 2],            // G7
+		[131, 2], [196, 2],            // Cmaj7
+		[ 87, 2], [131, 2],            // Fmaj7
+		[ 82, 2], [123, 2],            // E7:     E2  → B2
+		[110, 1], [104, 1], [110, 2],  // bar 15: Am with G#2 chromatic neighbour
+		[ 82, 2], [123, 2]             // bar 16: E7 → loop back to Am
+	];
 
-	function scheduleNote(opts) {
+	// Chord pad — root/3rd/5th stacks, one chord per bar, kept in the mid
+	// register (F3-A4) so it sits between bass and lead.
+	var PAD_CHORDS = [
+		[220, 262, 330],   // Am:     A3 C4 E4
+		[294, 349, 440],   // Dm:     D4 F4 A4
+		[196, 247, 294],   // G7:     G3 B3 D4
+		[262, 330, 392],   // Cmaj7:  C4 E4 G4
+		[175, 220, 262],   // Fmaj7:  F3 A3 C4
+		[247, 294, 349],   // Bm7b5:  B3 D4 F4
+		[165, 208, 247],   // E7:     E3 G#3 B3
+		[220, 262, 330],   // Am
+		// Bars 9-14 mirror 1-5 then jump straight to E7 (no Bm7b5 the
+		// second time) so bars 15-16 can do the Am → E7 turnaround.
+		[220, 262, 330],   // Am
+		[294, 349, 440],   // Dm
+		[196, 247, 294],   // G7
+		[262, 330, 392],   // Cmaj7
+		[175, 220, 262],   // Fmaj7
+		[165, 208, 247],   // E7
+		[220, 262, 330],   // Am
+		[165, 208, 247]    // bar 16: E7 turnaround
+	];
+
+	function scheduleVoice(opts) {
 		var c = ctx;
 		if (!c || !musicGain) return;
+		if (!opts.freq) return; // freq=0 → rest
 		var o = c.createOscillator();
 		var g = c.createGain();
 		o.type = opts.type;
 		o.frequency.setValueAtTime(opts.freq, opts.startTime);
-		o.connect(g);
+
+		var head = o;
+		if (opts.filter) {
+			var f = c.createBiquadFilter();
+			f.type = opts.filter.type;
+			f.frequency.setValueAtTime(opts.filter.freq, opts.startTime);
+			if (opts.filter.Q != null) f.Q.setValueAtTime(opts.filter.Q, opts.startTime);
+			head.connect(f);
+			head = f;
+		}
+		head.connect(g);
 		g.connect(musicGain);
-		// Soft attack/release so square-wave notes don't click.
+
+		// Optional vibrato — modulates the oscillator frequency. Crucial
+		// for the sax-like character of the lead.
+		if (opts.vibrato) {
+			var lfo = c.createOscillator();
+			var lfoGain = c.createGain();
+			lfo.frequency.setValueAtTime(opts.vibrato.rate, opts.startTime);
+			// Delay vibrato slightly so short notes don't warble unnaturally.
+			var depth = opts.freq * opts.vibrato.depth;
+			lfoGain.gain.setValueAtTime(0, opts.startTime);
+			lfoGain.gain.linearRampToValueAtTime(depth, opts.startTime + Math.min(opts.duration * 0.4, 0.18));
+			lfo.connect(lfoGain);
+			lfoGain.connect(o.frequency);
+			lfo.start(opts.startTime);
+			lfo.stop(opts.startTime + opts.duration + 0.02);
+		}
+
+		var attack = opts.attack != null ? opts.attack : 0.01;
+		var sustain = opts.sustain != null ? opts.sustain : 0.7;
 		g.gain.setValueAtTime(0, opts.startTime);
-		g.gain.linearRampToValueAtTime(opts.volume, opts.startTime + 0.01);
-		g.gain.linearRampToValueAtTime(opts.volume * 0.6, opts.startTime + opts.duration * 0.6);
+		g.gain.linearRampToValueAtTime(opts.volume, opts.startTime + attack);
+		g.gain.linearRampToValueAtTime(opts.volume * sustain, opts.startTime + opts.duration * 0.65);
 		g.gain.exponentialRampToValueAtTime(0.0005, opts.startTime + opts.duration);
 		o.start(opts.startTime);
 		o.stop(opts.startTime + opts.duration + 0.02);
@@ -141,35 +222,66 @@
 		}
 
 		var start = musicNextStartCtxTime;
-		// Melody.
+
+		// Sax-style lead: filtered sawtooth with vibrato.
 		var t = start;
 		for (var i = 0; i < MELODY.length; i++) {
-			var freq = MELODY[i][0];
-			var beats = MELODY[i][1];
-			var dur = beats * BEAT;
-			scheduleNote({
-				type: 'square',
-				freq: freq,
-				startTime: t,
-				duration: dur * 0.92,
-				volume: 0.055
-			});
-			t += dur;
+			var mf = MELODY[i][0];
+			var mb = MELODY[i][1];
+			var mdur = mb * BEAT;
+			if (mf > 0) {
+				scheduleVoice({
+					type: 'sawtooth',
+					freq: mf,
+					startTime: t,
+					duration: mdur * 0.94,
+					volume: 0.07,
+					attack: 0.035,
+					sustain: 0.85,
+					filter: { type: 'bandpass', freq: 1500, Q: 1.4 },
+					vibrato: { rate: 5.5, depth: 0.012 }
+				});
+			}
+			t += mdur;
 		}
-		// Bass.
-		for (var b = 0; b < BASS.length; b++) {
-			scheduleNote({
+
+		// Walking bass.
+		var tb = start;
+		for (var bi = 0; bi < BASS.length; bi++) {
+			var bf = BASS[bi][0];
+			var bb = BASS[bi][1];
+			var bdur = bb * BEAT;
+			scheduleVoice({
 				type: 'triangle',
-				freq: BASS[b],
-				startTime: start + b * BAR,
-				duration: BAR * 0.95,
-				volume: 0.08
+				freq: bf,
+				startTime: tb,
+				duration: bdur * 0.95,
+				volume: 0.075,
+				attack: 0.006,
+				sustain: 0.6
 			});
+			tb += bdur;
+		}
+
+		// Chord pad — one chord per bar, slow swell, very soft.
+		for (var pb = 0; pb < PAD_CHORDS.length; pb++) {
+			var chord = PAD_CHORDS[pb];
+			for (var pn = 0; pn < chord.length; pn++) {
+				scheduleVoice({
+					type: 'triangle',
+					freq: chord[pn],
+					startTime: start + pb * BAR,
+					duration: BAR * 0.98,
+					volume: 0.017,
+					attack: 0.09,
+					sustain: 0.9
+				});
+			}
 		}
 
 		musicNextStartCtxTime += LOOP;
-		// Re-queue ~150ms before this loop ends so the next batch is ready.
-		musicTimer = setTimeout(scheduleLoop, (LOOP - 0.15) * 1000);
+		// Re-queue ~200ms before this loop ends so the next batch is ready.
+		musicTimer = setTimeout(scheduleLoop, (LOOP - 0.2) * 1000);
 	}
 
 	function startMusic() {
@@ -179,7 +291,7 @@
 		musicStopped = false;
 		if (!musicGain) {
 			musicGain = c.createGain();
-			musicGain.gain.setValueAtTime(0.6, c.currentTime);
+			musicGain.gain.setValueAtTime(0.5, c.currentTime);
 			musicGain.connect(c.destination);
 		}
 		musicNextStartCtxTime = c.currentTime + 0.1;
