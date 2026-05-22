@@ -675,6 +675,12 @@ func (p *Playfield) Start() {
 				p.Broadcast <- scorePacket(id, req.Worm)
 			case packet := <-p.Broadcast:
 				for m, id := range p.Movables {
+					// AI worms have no websocket consumer draining their
+					// Outbox, so writes would just fill the buffer and then
+					// log "Could not send packet" forever.
+					if w, ok := m.(*Worm); ok && w.AI {
+						continue
+					}
 					c := m.Channel()
 					select {
 					case c <- packet:
