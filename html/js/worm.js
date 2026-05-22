@@ -96,10 +96,12 @@
 
 		var grid = this.flow.options.grid;
 		var l = positions.length - 1;
-		this.split(l);
-		if (l <= 0) {
-			// No visible parts to tween — clear stale tween state so a
-			// later tick() cannot operate on dead positions.
+		// Worm fully consumed (positions.length === 0, so l === -1). Clear
+		// state and bail before the truncation below, which would throw
+		// 'Invalid array length' on parts.length = -1 and abort the whole
+		// onmessage handler.
+		if (l < 0) {
+			this.parts.length = 0;
 			this.startPx = null;
 			this.endPx = null;
 			this.visualPx = null;
@@ -107,6 +109,22 @@
 			this.targetCells = null;
 			return;
 		}
+		// A worm bitten down to a single cell still needs its head drawn,
+		// otherwise it goes invisible, the player can't tell where they
+		// are, and they can't aim toward food to grow back. Treat
+		// positions.length === 1 as "one visible head part at positions[0]";
+		// the loops below special-case the missing positions[i+1] neighbor.
+		var oneCell = positions.length === 1;
+		if (oneCell) l = 1;
+
+		// Truncate stale parts when the worm shrank (Pac-Man bite). split()
+		// only adds parts, so without this trim the bitten tail cells stay
+		// rendered at their last positions until something else moves over
+		// them, which looks like the worm is frozen at full length.
+		if (this.parts.length > l) {
+			this.parts.length = l;
+		}
+		this.split(l);
 
 		var prevTargetCells = this.targetCells;
 		var prevContinuous = this.continuousCells;
@@ -131,7 +149,9 @@
 		if (this.useContinuous) {
 			newContinuous = new Array(positions.length);
 			for (i = 0; i < positions.length; i++) {
-				if ((sameLen || (growth && i < prevLen)) && prevContinuous && i < prevContinuous.length) {
+				var prevSlot = prevTargetCells && prevContinuous &&
+				               i < prevTargetCells.length && i < prevContinuous.length;
+				if ((sameLen || (growth && i < prevLen)) && prevSlot) {
 					var d = stepDelta(prevTargetCells[i], positions[i]);
 					newContinuous[i] = {
 						X: prevContinuous[i].X + d.dx,
@@ -141,6 +161,16 @@
 					newContinuous[i] = {
 						X: prevContinuous[prevLen - 1].X,
 						Y: prevContinuous[prevLen - 1].Y
+					};
+				} else if (prevSlot) {
+					// Shrink (Pac-Man bite): surviving slots still
+					// advanced by one cell on this tick, so stepDelta
+					// keeps the head from teleporting back to its raw
+					// server cell when the tail goes away.
+					var ds = stepDelta(prevTargetCells[i], positions[i]);
+					newContinuous[i] = {
+						X: prevContinuous[i].X + ds.dx,
+						Y: prevContinuous[i].Y + ds.dy
 					};
 				} else {
 					newContinuous[i] = {X: positions[i].X, Y: positions[i].Y};
@@ -153,10 +183,15 @@
 
 		// Target pixel for each visible body part. pixelFor is wrap-aware
 		// but with continuous coords the wrap branch never fires (deltas
-		// are always |1| or 0).
+		// are always |1| or 0). For a head-only worm there is no "between"
+		// neighbour — render at the cell itself.
 		var endPx = new Array(l);
 		for (i = 0; i < l; i++) {
-			endPx[i] = pixelFor(renderCells[i], renderCells[i + 1], grid);
+			if (oneCell) {
+				endPx[i] = {x: renderCells[0].X * grid, y: renderCells[0].Y * grid};
+			} else {
+				endPx[i] = pixelFor(renderCells[i], renderCells[i + 1], grid);
+			}
 		}
 
 		// startPx: where this tween begins per part. Parts that existed
@@ -239,7 +274,21 @@
 			part.y = startPx[i].y;
 
 			if (i === 0) {
-				part.frame = headFrame(c, n);
+				if (n) {
+					part.frame = headFrame(c, n);
+				} else if (prevTargetCells && prevTargetCells.length > 0 &&
+				           (prevTargetCells[0].X !== c.X || prevTargetCells[0].Y !== c.Y)) {
+					// 1-cell worm with no body to derive facing from.
+					// Use prev-head → curr-head as the direction the
+					// worm just moved. headFrame(curr, next-behind)
+					// takes the cell "behind" the head, which here is
+					// where the head was last tick.
+					part.frame = headFrame(c, prevTargetCells[0]);
+				} else if (part.frame == null) {
+					// First-ever MOVE happens to be a stationary 1-cell
+					// worm — pick a default rather than leave unset.
+					part.frame = 3; // head-right
+				}
 				part.visible = true;
 			} else {
 				part.visible = (c.X !== p.X || c.Y !== p.Y);

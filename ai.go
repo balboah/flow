@@ -28,7 +28,17 @@ type AIPersonality struct {
 	// Self-collision and 180° reversals stay filtered out (those would
 	// be unforced errors no human would make).
 	MistakeRate float64
+	// PacManFear is the penalty per cell of (PacManFearRadius - distance)
+	// from Pac-Man's predicted next anchor, applied to every candidate
+	// direction. When Pac-Man is far the term is zero; up close it
+	// dominates food pull so the bot actually runs instead of munching.
+	PacManFear float64
 }
+
+// PacManFearRadius is how close (manhattan) Pac-Man has to be for a bot
+// to start treating distance from him as a primary scoring factor. Beyond
+// this distance, food pull / inertia / center-pull are the only inputs.
+const PacManFearRadius = 8
 
 // newPersonality draws a fresh persona from a random seed. The seed becomes
 // the bot's identity (name) so the same seed always produces the same player.
@@ -43,6 +53,7 @@ func newPersonality() AIPersonality {
 		CenterPull:     r.Float64() * 0.5,       // 0.0 – 0.5
 		HesitationRate: 0.03 + r.Float64()*0.07, // 3% – 10%
 		MistakeRate:    0.02 + r.Float64()*0.05, // 2% – 7%
+		PacManFear:     0.6 + r.Float64()*0.6,   // 0.6 – 1.2
 	}
 }
 
@@ -80,6 +91,19 @@ func pickAIDirection(w *Worm, p *Playfield) Direction {
 		dir   Direction
 		score float64
 	}
+	// Pac-Man's predicted next anchor — what the bot has to evade. We
+	// use the predicted, not current, position because by the time the
+	// bot's move lands Pac-Man has already moved one cell too.
+	var pacNext Position
+	havePacMan := false
+	if p.pacman != nil {
+		pacNext = p.pacman.pos
+		if p.pacman.direction != Unknown {
+			pacNext = wrap(step(p.pacman.pos, p.pacman.direction))
+		}
+		havePacMan = true
+	}
+
 	scores := make([]scored, 0, len(candidates))
 	for _, d := range candidates {
 		next := wrap(step(w.Head(), d))
@@ -93,6 +117,16 @@ func pickAIDirection(w *Worm, p *Playfield) Direction {
 			s += personality.Inertia
 		}
 		s -= personality.CenterPull * float64(manhattan(next, Position{Boundary / 2, Boundary / 2}))
+		// Fear of Pac-Man: subtract a penalty proportional to how
+		// deep `next` sits inside the fear radius. Zero outside the
+		// radius so distant Pac-Man activity doesn't twitch the bot
+		// off its food path.
+		if havePacMan {
+			dPm := manhattan(next, pacNext)
+			if dPm < PacManFearRadius {
+				s -= personality.PacManFear * float64(PacManFearRadius-dPm)
+			}
+		}
 		scores = append(scores, scored{d, s})
 	}
 
@@ -174,6 +208,19 @@ func safeDirections(w *Worm, p *Playfield) []Direction {
 		// kills both, so dodge if we can.
 		if ow.direction != Unknown {
 			blocked[wrap(step(ow.Head(), ow.direction))] = struct{}{}
+		}
+	}
+	// Pac-Man's current footprint is bite territory if we step into any of
+	// it; his predicted-next footprint covers the head-on-swap case.
+	if p.pacman != nil {
+		for _, c := range p.pacman.Footprint() {
+			blocked[c] = struct{}{}
+		}
+		if p.pacman.direction != Unknown {
+			nextAnchor := wrap(step(p.pacman.pos, p.pacman.direction))
+			for _, c := range footprintAt(nextAnchor) {
+				blocked[c] = struct{}{}
+			}
 		}
 	}
 	out := make([]Direction, 0, 4)

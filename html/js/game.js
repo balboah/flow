@@ -417,6 +417,29 @@
 					var score = (game.hud.scores[id] && game.hud.scores[id].score) || 0;
 					game.showGameOver(payload.Reason, score);
 				}
+			},
+
+			pacman: function(payload) {
+				if (!game.field.pacman) {
+					game.field.pacman = new Pacman(game.field);
+				}
+				game.field.pacman.update(payload);
+			},
+
+			pacman_kill: function() {
+				if (game.field.pacman) {
+					game.field.pacman.kill();
+					game.field.pacman = null;
+				}
+			},
+
+			bite: function(payload) {
+				if (payload.LostPositions && payload.LostPositions.length) {
+					game.field.explode(payload.LostPositions);
+				}
+				if (window.sounds && payload.WormId === game.hud.ownId && sounds.pop) {
+					sounds.pop();
+				}
 			}
 
 		}

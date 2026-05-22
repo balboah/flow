@@ -112,6 +112,11 @@ type Playfield struct {
 	// a live websocket — so disconnect just means the client's view goes
 	// stale until it reconnects and we resync.
 	Tokens map[string]*Worm
+
+	// pacman is the single hunter on the field while any human is online.
+	// nil otherwise. Kept as a direct pointer so the tick's bite phase can
+	// reach him without iterating Movables.
+	pacman *PacMan
 }
 
 func NewPlayfield() *Playfield {
@@ -132,12 +137,19 @@ func NewPlayfield() *Playfield {
 	}
 }
 
-// occupied returns positions currently blocked (worm bodies + existing food).
+// occupied returns positions currently blocked (worm bodies + existing
+// food + Pac-Man's footprint). Pac-Man isn't a Movable so he has to be
+// added explicitly; without this, food could spawn under him.
 func (p *Playfield) occupied() map[Position]struct{} {
 	out := make(map[Position]struct{})
 	for m := range p.Movables {
 		for _, pos := range m.Positions() {
 			out[pos] = struct{}{}
+		}
+	}
+	if p.pacman != nil {
+		for _, c := range p.pacman.Footprint() {
+			out[c] = struct{}{}
 		}
 	}
 	for _, f := range p.Foods {
@@ -278,10 +290,12 @@ func (p *Playfield) aiTargetCount() int {
 	return target
 }
 
-// reconcileAIs nudges the AI roster toward aiTargetCount. Bots spawn with a
-// freshly-seeded random personality and are removed via the standard KILL
-// path so other clients see them disappear cleanly.
-func (p *Playfield) reconcileAIs() {
+// reconcilePopulation nudges the AI roster toward aiTargetCount and the
+// Pac-Man hunter toward "present iff a human is online". Called whenever
+// the human roster changes (ConnState / stale-sweep). Bots and Pac-Man
+// share the same lifetime trigger because both are pointless on an empty
+// field.
+func (p *Playfield) reconcilePopulation() {
 	currentAIs := make([]*Worm, 0, 4)
 	for m := range p.Movables {
 		if w, ok := m.(*Worm); ok && w.AI {
@@ -294,6 +308,131 @@ func (p *Playfield) reconcileAIs() {
 	}
 	for i := target; i < len(currentAIs); i++ {
 		p.removeMovable(currentAIs[i])
+	}
+	p.reconcilePacMan()
+}
+
+// reconcilePacMan spawns or despawns the single Pac-Man hunter to match the
+// "any human online" predicate. Pac-Man's presence is tied to humans the
+// same way AI worms are — no point hunting when the field is empty.
+func (p *Playfield) reconcilePacMan() {
+	wantPacMan := false
+	for m := range p.Movables {
+		if w, ok := m.(*Worm); ok && !w.AI && w.connected {
+			wantPacMan = true
+			break
+		}
+	}
+	if wantPacMan && p.pacman == nil {
+		p.spawnPacMan()
+	} else if !wantPacMan && p.pacman != nil {
+		p.Broadcast <- Packet{Command: "PACMAN_KILL"}
+		p.pacman = nil
+	}
+}
+
+// spawnPacMan places a fresh Pac-Man on a safe anchor (his whole 2x2
+// footprint clear of worm bodies, and far enough from every worm head
+// that no worm gets a first-tick freebie bite) and broadcasts the
+// initial PACMAN packet so clients render him before the next tick.
+func (p *Playfield) spawnPacMan() {
+	pm := NewPacMan(p.safePacManAnchor())
+	p.pacman = pm
+	p.Broadcast <- pacManPacket(pm)
+}
+
+// safePacManAnchor returns an anchor cell whose 2x2 footprint is clear of
+// every worm body and at least minHeadDistance manhattan-cells from each
+// worm head. Mirrors safeSpawn (which is single-cell), but extended to
+// the full footprint so a freshly spawned Pac-Man doesn't bite on the
+// first tick.
+func (p *Playfield) safePacManAnchor() Position {
+	const minHeadDistance = 6
+
+	bodies := map[Position]struct{}{}
+	heads := make([]Position, 0, len(p.Movables))
+	for m := range p.Movables {
+		w, ok := m.(*Worm)
+		if !ok || w.killed {
+			continue
+		}
+		for _, b := range w.blocks {
+			bodies[b] = struct{}{}
+		}
+		heads = append(heads, w.Head())
+	}
+
+	footprintClear := func(anchor Position) bool {
+		for _, c := range footprintAt(anchor) {
+			if _, hit := bodies[c]; hit {
+				return false
+			}
+			for _, h := range heads {
+				if manhattan(c, h) < minHeadDistance {
+					return false
+				}
+			}
+		}
+		return true
+	}
+
+	for tries := 0; tries < 200; tries++ {
+		anchor := Position{X: rand.IntN(Boundary + 1), Y: rand.IntN(Boundary + 1)}
+		if footprintClear(anchor) {
+			return anchor
+		}
+	}
+	// Fallback: drop the head-distance constraint but still avoid body
+	// overlap, so the spawn at least doesn't start mid-worm.
+	for tries := 0; tries < 200; tries++ {
+		anchor := Position{X: rand.IntN(Boundary + 1), Y: rand.IntN(Boundary + 1)}
+		ok := true
+		for _, c := range footprintAt(anchor) {
+			if _, hit := bodies[c]; hit {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return anchor
+		}
+	}
+	// Last resort: scan the field deterministically and return the
+	// first body-clear anchor. Shouldn't be reachable on a 50x50 field
+	// (would require every 2x2 window to overlap a worm body), but if
+	// it ever is, do NOT return an unconstrained random anchor: that
+	// would defeat the entire purpose of this function and bite a
+	// worm on tick 0. The first body-clear cell is always safe enough.
+	for y := 0; y <= Boundary; y++ {
+		for x := 0; x <= Boundary; x++ {
+			anchor := Position{X: x, Y: y}
+			clear := true
+			for _, c := range footprintAt(anchor) {
+				if _, hit := bodies[c]; hit {
+					clear = false
+					break
+				}
+			}
+			if clear {
+				return anchor
+			}
+		}
+	}
+	// Field is fully occupied by worm bodies (mathematically impossible
+	// on a 50x50 field with bounded worm counts). Return origin as a
+	// safety net rather than a random unsafe anchor; spawnPacMan's
+	// caller can detect-and-skip if this proves a problem.
+	return Position{}
+}
+
+func pacManPacket(pm *PacMan) Packet {
+	return Packet{
+		Command: "PACMAN",
+		Payload: PacManPayload{
+			X:         pm.pos.X,
+			Y:         pm.pos.Y,
+			Direction: pm.Direction().String(),
+		},
 	}
 }
 
@@ -337,6 +476,22 @@ func (p *Playfield) announceJoin(m Movable, id Id) {
 	if w.Name == "" {
 		w.Name = fmt.Sprintf("Worm-%d", id)
 	}
+	// Seed the field with food on first join so a single player has
+	// something to chase. Done before the AI short-circuit below so an
+	// AI-only first join still populates the field.
+	for len(p.Foods) < FoodCount {
+		f := p.spawnFood()
+		p.Broadcast <- foodPacket(f)
+	}
+	if w.AI {
+		// AI worms have no consumer draining their Outbox; the broadcast
+		// fan-out skips them too. The catch-up WELCOME / food / score /
+		// PACMAN sends below would fill the 64-slot buffer and block the
+		// playfield goroutine. Only the join announcement to other
+		// players is needed.
+		p.Broadcast <- scorePacket(id, w)
+		return
+	}
 	// Tell the new client who it is.
 	w.Outbox <- Packet{Command: "WELCOME", Payload: WelcomePayload{
 		Id:          id,
@@ -346,11 +501,6 @@ func (p *Playfield) announceJoin(m Movable, id Id) {
 		DeathReason: w.deathReason,
 		Score:       w.Score,
 	}}
-	// Seed the field with food on first join so a single player has something to chase.
-	for len(p.Foods) < FoodCount {
-		f := p.spawnFood()
-		p.Broadcast <- foodPacket(f)
-	}
 	// Catch the new client up on current state.
 	for _, f := range p.Foods {
 		w.Outbox <- foodPacket(*f)
@@ -359,6 +509,9 @@ func (p *Playfield) announceJoin(m Movable, id Id) {
 		if ow, ok := other.(*Worm); ok {
 			w.Outbox <- scorePacket(otherId, ow)
 		}
+	}
+	if p.pacman != nil {
+		w.Outbox <- pacManPacket(p.pacman)
 	}
 	// Announce the new player to everyone (including itself).
 	p.Broadcast <- scorePacket(id, w)
@@ -376,7 +529,13 @@ func (p *Playfield) removeMovable(m Movable) {
 
 // resyncWorm flushes any stale packets and re-pushes the worm's view of the
 // world to its outbox. Used when a client reconnects with a known token.
+// Defensive no-op on AI worms (which lack a token-based reconnect path)
+// so an unexpected match never blocks the playfield goroutine on the
+// undrained AI Outbox.
 func (p *Playfield) resyncWorm(w *Worm, id Id) {
+	if w.AI {
+		return
+	}
 	for {
 		select {
 		case <-w.Outbox:
@@ -400,6 +559,9 @@ drained:
 		if ow, ok := other.(*Worm); ok {
 			w.Outbox <- scorePacket(otherId, ow)
 		}
+	}
+	if p.pacman != nil {
+		w.Outbox <- pacManPacket(p.pacman)
 	}
 	// GAMEOVER state travels in WELCOME above — no separate packet needed
 	// (and avoids racing the client's hideGameOver in the welcome handler).
@@ -427,7 +589,7 @@ func (p *Playfield) tick() {
 		for _, m := range stale {
 			p.removeMovable(m)
 		}
-		p.reconcileAIs()
+		p.reconcilePopulation()
 	}
 
 	// AI bots only run while a human has a live websocket — keeps them from
@@ -445,6 +607,15 @@ func (p *Playfield) tick() {
 		reason string
 	}
 	var deaths []death
+
+	// Snapshot every living worm's pre-move head cell, so the Pac-Man bite
+	// phase can detect a head-on swap (worm head and Pac-Man trading cells).
+	prevHeads := map[*Worm]Position{}
+	for m := range p.Movables {
+		if w, ok := m.(*Worm); ok && !w.killed && len(w.blocks) > 0 {
+			prevHeads[w] = w.Head()
+		}
+	}
 
 	// Phase 1: move every living worm. Wall and self-collision deaths are
 	// captured by Move; record them so we can broadcast GAMEOVER at the end.
@@ -475,6 +646,14 @@ func (p *Playfield) tick() {
 		if isWorm && w.killed {
 			deaths = append(deaths, death{id, w.deathReason})
 		}
+	}
+
+	// Phase 1b: move Pac-Man after worms so his AI reacts to where they
+	// just landed, not where they came from. Skipped if no humans are
+	// online (he despawns then anyway via reconcilePacMan, but the guard
+	// keeps the tick cheap during the brief window before despawn lands).
+	if p.pacman != nil && anyHumanOnline {
+		p.pacman.Move(pickPacManDirection(p.pacman, p))
 	}
 
 	// Phase 2: snake-on-snake — slither.io-style rules.
@@ -531,6 +710,36 @@ func (p *Playfield) tick() {
 		deaths = append(deaths, death{id, w.deathReason})
 	}
 
+	// Phase 2b: Pac-Man bite. May kill (head bite) or truncate (body bite)
+	// at most one worm per tick. Broadcast BITE for the body case after we
+	// know which segments were lost; head bite falls through to the regular
+	// GAMEOVER broadcast. Gated on anyHumanOnline to match Phase 1b/3b:
+	// Pac-Man doesn't move or broadcast in human-less ticks, so he must
+	// not bite either (otherwise stationary Pac-Man could still kill AI
+	// worms in the gap before reconcilePacMan despawns him).
+	var bitePackets []Packet
+	if p.pacman != nil && anyHumanOnline {
+		bittenWorm, segIdx, lost := resolvePacManBite(p.pacman, prevHeads, p)
+		if bittenWorm != nil {
+			id := p.Movables[bittenWorm]
+			if segIdx == 0 {
+				deaths = append(deaths, death{id, bittenWorm.deathReason})
+			} else {
+				bitePackets = append(bitePackets, Packet{
+					Command: "BITE",
+					Payload: BitePayload{
+						WormId:        id,
+						SegmentIndex:  segIdx,
+						LostPositions: lost,
+					},
+				})
+				// Score-bar redraw — points unchanged, but clients can
+				// react (e.g., name flash) on the SCORE packet too.
+				p.Broadcast <- scorePacket(id, bittenWorm)
+			}
+		}
+	}
+
 	// Phase 3: broadcast MOVE for living worms.
 	for m, id := range p.Movables {
 		w, isWorm := m.(*Worm)
@@ -547,12 +756,26 @@ func (p *Playfield) tick() {
 		}
 	}
 
+	// Phase 3b: broadcast Pac-Man's current cell + facing. One packet per
+	// tick while Pac-Man is alive; clients tween the cell-step the same
+	// way they tween worm bodies.
+	if p.pacman != nil && anyHumanOnline {
+		p.Broadcast <- pacManPacket(p.pacman)
+	}
+
 	// Phase 4: announce deaths.
 	for _, d := range deaths {
 		p.Broadcast <- Packet{
 			Command: "GAMEOVER",
 			Payload: GameOverPayload{WormId: d.id, Reason: d.reason},
 		}
+	}
+
+	// Phase 4b: bite events (non-fatal). Issued after MOVE so the client
+	// already has the post-bite positions; the BITE packet only drives
+	// the puff-of-particles effect.
+	for _, pkt := range bitePackets {
+		p.Broadcast <- pkt
 	}
 
 	// Phase 5: food pickups (head must be alive to count).
@@ -633,7 +856,7 @@ func (p *Playfield) Start() {
 				} else {
 					s.Worm.disconnectedAt = time.Now()
 				}
-				p.reconcileAIs()
+				p.reconcilePopulation()
 			case req := <-p.MoveCmd:
 				w := req.Worm
 				if w.killed || req.Direction == Unknown {

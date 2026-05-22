@@ -60,3 +60,15 @@ type GameOverPayload struct {
 	WormId Id
 	Reason string
 }
+
+type PacManPayload struct {
+	X         int
+	Y         int
+	Direction string
+}
+
+type BitePayload struct {
+	WormId        Id
+	SegmentIndex  int
+	LostPositions []Position
+}

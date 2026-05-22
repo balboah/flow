@@ -32,6 +32,7 @@
 		this.foods = {};
 		this.particles = [];
 		this.markers = {};      // id → {x, y, color, opacity, angle} (rad)
+		this.pacman = null;     // null when not on the field
 		this.showGrid = false;
 		this.logicalSize = this.options.cols * this.options.grid;
 
@@ -313,6 +314,7 @@
 					);
 				}
 			}
+			if (self.pacman && self.pacman.tick(now)) anyActive = true;
 
 			if (now - self._lastMarkerTime >= MARKER_THROTTLE_MS) {
 				self._lastMarkerTime = now;
@@ -509,6 +511,23 @@
 						part.x + cdx, part.y + cdy, grid, grid
 					);
 				}
+			}
+		}
+
+		// 4b. Pac-Man — drawn on top of worms so the bite is visually
+		//     unambiguous. Tiled 9× in camera mode to match wrap. The
+		//     drawn size is Pacman.SIZE × grid so his body engulfs
+		//     the worm cells his footprint actually covers.
+		if (this.pacman && this.pacman.visualPx) {
+			var pmSize = Pacman.SIZE * grid;
+			for (var pc = 0; pc < GHOST_OFFSETS.length; pc++) {
+				var poff = GHOST_OFFSETS[pc];
+				this.pacman.drawAt(
+					ctx,
+					this.pacman.visualPx.x + poff[0] * fieldPx,
+					this.pacman.visualPx.y + poff[1] * fieldPx,
+					pmSize, now
+				);
 			}
 		}
 
