@@ -18,7 +18,8 @@ test:
 
 # Local dev server. Serves the static html/ assets and the /worms WebSocket.
 run:
-	PORT=$(PORT) go run ./flow
+	@echo "Serving on http://localhost:$(PORT)"
+	@PORT=$(PORT) go run ./flow
 
 # Print the dev port that `make run` would use for this checkout.
 port:
