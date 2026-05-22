@@ -483,12 +483,18 @@
 		}
 		ctx.globalAlpha = 1;
 
-		// 4. Worms — local once, remotes tiled 9×.
+		// 4. Worms — tiled 9× except for the local worm in camera mode,
+		//    where the camera follows the head so only the central tile is
+		//    ever visible. In fit mode the local worm still needs 9 copies:
+		//    its continuous coords let body parts sit at negative x/y after
+		//    a wrap-renorm, and without tile copies those segments render
+		//    off-canvas (the whole worm appears to vanish at the edge until
+		//    each segment ticks back into [0, cols)).
 		var wormIds = Object.keys(this.worms);
 		for (var wi = 0; wi < wormIds.length; wi++) {
 			var w = this.worms[wormIds[wi]];
 			if (!w.image || !w.image.complete || !w.image.naturalWidth) continue;
-			var copies = w.useContinuous ? 1 : GHOST_OFFSETS.length;
+			var copies = (w.useContinuous && this.cameraMode) ? 1 : GHOST_OFFSETS.length;
 			for (var c = 0; c < copies; c++) {
 				var coff = GHOST_OFFSETS[c];
 				var cdx = coff[0] * fieldPx;
