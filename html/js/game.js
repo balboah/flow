@@ -14,6 +14,11 @@
 	var game = window.game = {
 
 		ws: null,
+		// Packets buffered while the WebSocket is closed. Flushed in
+		// onopen so a press during a reconnect (notably "New Game" after
+		// the server's 90s idle timeout) still reaches the server, instead
+		// of being silently dropped.
+		_pending: [],
 
 		// Stored handler references so re-binding (on reconnect) can detach the
 		// previous listener before attaching a new one. Replaces the jQuery
@@ -129,7 +134,18 @@
 		},
 
 		// Opens a WebSocket connection. `name` is the player's chosen alias.
+		// Also used to re-open after the server's idle timeout drops us.
 		connect: function(name){
+			// Tear down any prior socket: detach handlers (defensive in case
+			// callers wire onclose later) and close it so we don't leak the
+			// underlying connection.
+			if (game.ws) {
+				game.ws.onclose = null;
+				game.ws.onerror = null;
+				game.ws.onmessage = null;
+				game.ws.onopen = null;
+				try { game.ws.close(); } catch (e) {}
+			}
 			var proto = (document.location.protocol === 'https:') ? 'wss:' : 'ws:';
 			var ws = game.ws = new WebSocket(proto + '//' + document.location.host + '/worms');
 
@@ -151,8 +167,18 @@
 				var token = loadStored(STORAGE_TOKEN);
 				game.send({Command: 'HELLO', Payload: {Name: name, Token: token}});
 				game.bindControls();
+				// Drain anything the user did during the reconnect (e.g.
+				// the "New Game" click that woke this socket up).
+				var pending = game._pending;
+				game._pending = [];
+				for (var i = 0; i < pending.length; i++) {
+					ws.send(JSON.stringify(pending[i]));
+				}
 			};
 
+			// Note: no onclose auto-reconnect. The next send() reopens
+			// the socket lazily, so an idle disconnected tab doesn't
+			// spin up a fresh worm on its own.
 		},
 
 		bindControls: function(){
@@ -259,10 +285,32 @@
 			field.addEventListener('touchcancel', game._touchEndHandler);
 		},
 
-		// Send packet to server
+		// Send packet to server. If the socket has been closed (typically
+		// by the server's 90s idle timeout after a long stay on the game
+		// over screen), buffer the packet and trigger a reconnect. The
+		// onopen handler flushes the buffer once HELLO is in flight.
 		send: function(data){
 			if (game.ws && game.ws.readyState === WebSocket.OPEN) {
 				game.ws.send(JSON.stringify(data));
+				return;
+			}
+			// Reconnect needs a known alias; without one we'd buffer
+			// forever with nothing to drain. Warn so the drop is
+			// visible in devtools rather than failing silently.
+			var n = loadStored(STORAGE_NAME);
+			if (!n) {
+				console.warn('flow.send: dropping packet, no stored alias yet', data);
+				return;
+			}
+			game._pending.push(data);
+			// A CONNECTING socket already has an onopen waiting to drain
+			// the buffer. Any other state (CLOSING / CLOSED / no socket)
+			// triggers (re)connect. The connect() teardown stripping
+			// handlers on the prior socket is the only thing keeping the
+			// CLOSING case race-free; if any caller ever wires onclose,
+			// revisit (the prior socket's close event would be dropped).
+			if (!game.ws || game.ws.readyState !== WebSocket.CONNECTING) {
+				game.connect(n);
 			}
 		},
 
@@ -270,6 +318,27 @@
 		commands: {
 
 			welcome: function(payload) {
+				// A different Id means the reconnect landed on a fresh
+				// worm: the prior one was swept after DisconnectTTL.
+				// Drop everything we had. Orphan worms (no further MOVE
+				// updates) and orphan food (eaten while we were out)
+				// would otherwise linger forever. Catch-up SCORE/FOOD
+				// packets and the next MOVE tick rebuild the view.
+				if (game.hud.ownId != null && game.hud.ownId !== payload.Id) {
+					Object.keys(game.field.worms).forEach(function(id){
+						game.field.kill(Number(id));
+					});
+					Object.keys(game.field.foods).forEach(function(id){
+						game.field.removeFood(Number(id));
+					});
+					game.hud.scores = {};
+					// Drop any stale Pac-Man tween from the prior session;
+					// the new session re-announces him via the per-join
+					// PACMAN packet (or leaves him absent if the new field
+					// has none).
+					game.field.pacman = null;
+				}
+
 				game.hud.welcome(payload);
 				if (payload.Token) {
 					storeKey(STORAGE_TOKEN, payload.Token);
