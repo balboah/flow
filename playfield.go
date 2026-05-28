@@ -625,7 +625,17 @@ func (p *Playfield) tick() {
 			if w.AI {
 				w.aiDeadTicks++
 				if w.aiDeadTicks >= 10 {
+					// Reset() zeroes state but stacks every block at the
+					// hardcoded center cell (25,25). Without the safe-spawn
+					// relocation below, every AI respawn lands on the same
+					// cell, head-on collisions cluster, and Pac-Man can park
+					// near center to camp the respawn lane. Mirror the human
+					// Respawn handler: relocate via safeSpawn. Reset() leaves
+					// direction = Unknown, which Worm.Direction() resolves to
+					// a random heading on first call, so siblings don't march
+					// in lockstep.
 					w.Reset()
+					placeAt(w, p.safeSpawn())
 					w.aiDeadTicks = 0
 					p.Broadcast <- scorePacket(id, w)
 				}
